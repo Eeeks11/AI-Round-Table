@@ -60,26 +60,26 @@ class DeliberationConfig:
 DEFAULT_MODELS: Dict[str, ModelConfig] = {
     "gpt4": ModelConfig(
         provider="openai",
-        model_name="gpt-4-turbo-preview",
-        display_name="GPT-4 Turbo",
+        model_name="gpt-5.1",
+        display_name="GPT-5.1",
         api_key_env="OPENAI_API_KEY",
     ),
     "claude": ModelConfig(
         provider="anthropic",
-        model_name="claude-sonnet-4-20250514",
+        model_name="claude-sonnet-4.5",
         display_name="Claude Sonnet 4.5",
         api_key_env="ANTHROPIC_API_KEY",
     ),
     "gemini": ModelConfig(
         provider="google",
-        model_name="gemini-2.0-flash-exp",
-        display_name="Gemini 2.0 Flash",
+        model_name="gemini-3-pro",
+        display_name="Gemini 3 Pro",
         api_key_env="GOOGLE_API_KEY",
     ),
     "grok": ModelConfig(
         provider="grok",
-        model_name="grok-beta",
-        display_name="Grok Beta",
+        model_name="grok-4.1-thinking",
+        display_name="Grok 4.1 Thinking",
         api_key_env="GROK_API_KEY",
     ),
 }

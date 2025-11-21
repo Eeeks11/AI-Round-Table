@@ -8,28 +8,28 @@ This document tracks all supported AI models and their configurations. Update th
 
 **Model ID**: `gpt4`
 - **Provider**: OpenAI
-- **Model Name**: `gpt-4-turbo-preview`
-- **Display Name**: GPT-4 Turbo
+- **Model Name**: `gpt-5.1`
+- **Display Name**: GPT-5.1
 - **API Key Environment Variable**: `OPENAI_API_KEY`
 - **Status**: Active
-- **Last Updated**: 2024-01
-- **Notes**: Latest GPT-4 Turbo model with improved performance
+- **Last Updated**: 2025-11
+- **Notes**: Latest GPT-5.1 model with advanced capabilities
 
 **Alternative GPT Models** (to use, modify `config.py`):
+- `gpt-4-turbo-preview`: Previous GPT-4 Turbo model
 - `gpt-4`: Standard GPT-4 model
-- `gpt-4-32k`: GPT-4 with 32k context window
 - `gpt-3.5-turbo`: Faster, more economical option
 
 ### Anthropic Claude Models
 
 **Model ID**: `claude`
 - **Provider**: Anthropic
-- **Model Name**: `claude-sonnet-4-20250514`
+- **Model Name**: `claude-sonnet-4.5`
 - **Display Name**: Claude Sonnet 4.5
 - **API Key Environment Variable**: `ANTHROPIC_API_KEY`
 - **Status**: Active
-- **Last Updated**: 2024-05
-- **Notes**: Latest Sonnet model with excellent reasoning
+- **Last Updated**: 2025-11
+- **Notes**: Latest Sonnet 4.5 model with excellent reasoning
 
 **Alternative Claude Models**:
 - `claude-opus-4-20250514`: Most capable model, higher cost
@@ -40,29 +40,29 @@ This document tracks all supported AI models and their configurations. Update th
 
 **Model ID**: `gemini`
 - **Provider**: Google
-- **Model Name**: `gemini-2.0-flash-exp`
-- **Display Name**: Gemini 2.0 Flash
+- **Model Name**: `gemini-3-pro`
+- **Display Name**: Gemini 3 Pro
 - **API Key Environment Variable**: `GOOGLE_API_KEY`
-- **Status**: Active (Experimental)
-- **Last Updated**: 2024-12
-- **Notes**: Latest experimental Gemini model
+- **Status**: Active
+- **Last Updated**: 2025-11
+- **Notes**: Latest Gemini 3 Pro model with enhanced capabilities
 
 **Alternative Gemini Models**:
+- `gemini-2.0-flash-exp`: Experimental Gemini 2.0 model
 - `gemini-1.5-pro`: Stable production model
 - `gemini-1.5-flash`: Faster, cost-effective option
-- `gemini-pro`: Previous generation
 
 ### Grok Models
 
 **Model ID**: `grok`
 - **Provider**: X.AI (OpenAI-compatible)
-- **Model Name**: `grok-beta`
-- **Display Name**: Grok Beta
+- **Model Name**: `grok-4.1-thinking`
+- **Display Name**: Grok 4.1 Thinking
 - **API Key Environment Variable**: `GROK_API_KEY`
 - **Base URL**: `https://api.x.ai/v1`
-- **Status**: Active (Beta)
-- **Last Updated**: 2024-11
-- **Notes**: Uses OpenAI-compatible API
+- **Status**: Active
+- **Last Updated**: 2025-11
+- **Notes**: Uses OpenAI-compatible API with advanced thinking capabilities
 
 **Alternative Grok Models**:
 - Check X.AI documentation for latest available models
@@ -262,4 +262,4 @@ When models are deprecated by providers:
 
 ---
 
-Last Updated: 2024-11-21
+Last Updated: 2025-11-21
