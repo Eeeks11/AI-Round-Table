@@ -6,6 +6,7 @@ from typing import AsyncIterator, Optional
 import sys
 
 from config import ModelConfig
+from rate_limiter import RateLimiter, retry_with_exponential_backoff, DEFAULT_RATE_LIMITS
 
 
 class ProviderError(Exception):
@@ -41,6 +42,13 @@ class BaseProvider(ABC):
                 f"API key not found for {config.display_name}. "
                 f"Please set {config.api_key_env} in your .env file."
             )
+        
+        # Initialize rate limiter
+        rate_limit_config = DEFAULT_RATE_LIMITS.get(
+            config.provider,
+            DEFAULT_RATE_LIMITS["anthropic"]  # Default fallback
+        )
+        self.rate_limiter = RateLimiter(rate_limit_config)
     
     @abstractmethod
     async def generate_response(
@@ -110,26 +118,46 @@ class OpenAIProvider(BaseProvider):
         
         messages.append({"role": "user", "content": prompt})
         
-        try:
-            response = await self.client.chat.completions.create(
-                model=self.config.model_name,
-                messages=messages,
-                temperature=self.config.temperature,
-                max_completion_tokens=self.config.max_tokens,
-                stream=stream
-            )
-            
-            if stream:
-                async for chunk in response:
-                    if chunk.choices[0].delta.content:
-                        yield chunk.choices[0].delta.content
-            else:
-                yield response.choices[0].message.content
+        # Estimate tokens (rough estimate: ~4 chars per token)
+        estimated_tokens = (len(prompt) + len(system_message or "")) // 4 + self.config.max_tokens
+        
+        # Wait if rate limit would be exceeded
+        await self.rate_limiter.wait_if_needed(estimated_tokens)
+        
+        async def _make_request():
+            try:
+                response = await self.client.chat.completions.create(
+                    model=self.config.model_name,
+                    messages=messages,
+                    temperature=self.config.temperature,
+                    max_completion_tokens=self.config.max_tokens,
+                    stream=stream
+                )
                 
+                if stream:
+                    async for chunk in response:
+                        if chunk.choices[0].delta.content:
+                            yield chunk.choices[0].delta.content
+                else:
+                    yield response.choices[0].message.content
+                    
+            except Exception as e:
+                if "rate_limit" in str(e).lower() or "429" in str(e):
+                    raise RateLimitError(f"Rate limit exceeded for {self.config.display_name}")
+                raise ProviderError(f"Error from {self.config.display_name}: {str(e)}")
+        
+        # Use retry logic
+        try:
+            async for chunk in retry_with_exponential_backoff(
+                _make_request,
+                self.rate_limiter.config
+            ):
+                yield chunk
+            
+            # Record successful request
+            self.rate_limiter.record_request(estimated_tokens)
         except Exception as e:
-            if "rate_limit" in str(e).lower():
-                raise RateLimitError(f"Rate limit exceeded for {self.config.display_name}")
-            raise ProviderError(f"Error from {self.config.display_name}: {str(e)}")
+            raise
 
 
 class AnthropicProvider(BaseProvider):
@@ -152,29 +180,49 @@ class AnthropicProvider(BaseProvider):
         stream: bool = True
     ) -> AsyncIterator[str]:
         """Generate response from Anthropic model."""
-        try:
-            kwargs = {
-                "model": self.config.model_name,
-                "max_tokens": self.config.max_tokens,
-                "temperature": self.config.temperature,
-                "messages": [{"role": "user", "content": prompt}]
-            }
-            
-            if system_message:
-                kwargs["system"] = system_message
-            
-            if stream:
-                async with self.client.messages.stream(**kwargs) as response:
-                    async for chunk in response.text_stream:
-                        yield chunk
-            else:
-                response = await self.client.messages.create(**kwargs)
-                yield response.content[0].text
+        # Estimate tokens (rough estimate: ~4 chars per token)
+        estimated_tokens = (len(prompt) + len(system_message or "")) // 4 + self.config.max_tokens
+        
+        # Wait if rate limit would be exceeded
+        await self.rate_limiter.wait_if_needed(estimated_tokens)
+        
+        async def _make_request():
+            try:
+                kwargs = {
+                    "model": self.config.model_name,
+                    "max_tokens": self.config.max_tokens,
+                    "temperature": self.config.temperature,
+                    "messages": [{"role": "user", "content": prompt}]
+                }
                 
+                if system_message:
+                    kwargs["system"] = system_message
+                
+                if stream:
+                    async with self.client.messages.stream(**kwargs) as response:
+                        async for chunk in response.text_stream:
+                            yield chunk
+                else:
+                    response = await self.client.messages.create(**kwargs)
+                    yield response.content[0].text
+                    
+            except Exception as e:
+                if "rate_limit" in str(e).lower() or "429" in str(e):
+                    raise RateLimitError(f"Rate limit exceeded for {self.config.display_name}")
+                raise ProviderError(f"Error from {self.config.display_name}: {str(e)}")
+        
+        # Use retry logic
+        try:
+            async for chunk in retry_with_exponential_backoff(
+                _make_request,
+                self.rate_limiter.config
+            ):
+                yield chunk
+            
+            # Record successful request
+            self.rate_limiter.record_request(estimated_tokens)
         except Exception as e:
-            if "rate_limit" in str(e).lower():
-                raise RateLimitError(f"Rate limit exceeded for {self.config.display_name}")
-            raise ProviderError(f"Error from {self.config.display_name}: {str(e)}")
+            raise
 
 
 class GoogleProvider(BaseProvider):
@@ -207,28 +255,48 @@ class GoogleProvider(BaseProvider):
         stream: bool = True
     ) -> AsyncIterator[str]:
         """Generate response from Google model."""
+        # Combine system message with prompt for Gemini
+        full_prompt = prompt
+        if system_message:
+            full_prompt = f"{system_message}\n\n{prompt}"
+        
+        # Estimate tokens (rough estimate: ~4 chars per token)
+        estimated_tokens = len(full_prompt) // 4 + self.config.max_tokens
+        
+        # Wait if rate limit would be exceeded
+        await self.rate_limiter.wait_if_needed(estimated_tokens)
+        
+        async def _make_request():
+            try:
+                if stream:
+                    response = await self.model.generate_content_async(
+                        full_prompt,
+                        stream=True
+                    )
+                    async for chunk in response:
+                        if chunk.text:
+                            yield chunk.text
+                else:
+                    response = await self.model.generate_content_async(full_prompt)
+                    yield response.text
+                    
+            except Exception as e:
+                if "quota" in str(e).lower() or "rate" in str(e).lower() or "429" in str(e):
+                    raise RateLimitError(f"Rate limit exceeded for {self.config.display_name}")
+                raise ProviderError(f"Error from {self.config.display_name}: {str(e)}")
+        
+        # Use retry logic
         try:
-            # Combine system message with prompt for Gemini
-            full_prompt = prompt
-            if system_message:
-                full_prompt = f"{system_message}\n\n{prompt}"
+            async for chunk in retry_with_exponential_backoff(
+                _make_request,
+                self.rate_limiter.config
+            ):
+                yield chunk
             
-            if stream:
-                response = await self.model.generate_content_async(
-                    full_prompt,
-                    stream=True
-                )
-                async for chunk in response:
-                    if chunk.text:
-                        yield chunk.text
-            else:
-                response = await self.model.generate_content_async(full_prompt)
-                yield response.text
-                
+            # Record successful request
+            self.rate_limiter.record_request(estimated_tokens)
         except Exception as e:
-            if "quota" in str(e).lower() or "rate" in str(e).lower():
-                raise RateLimitError(f"Rate limit exceeded for {self.config.display_name}")
-            raise ProviderError(f"Error from {self.config.display_name}: {str(e)}")
+            raise
 
 
 class GrokProvider(BaseProvider):
@@ -262,26 +330,46 @@ class GrokProvider(BaseProvider):
         
         messages.append({"role": "user", "content": prompt})
         
-        try:
-            response = await self.client.chat.completions.create(
-                model=self.config.model_name,
-                messages=messages,
-                temperature=self.config.temperature,
-                max_completion_tokens=self.config.max_tokens,
-                stream=stream
-            )
-            
-            if stream:
-                async for chunk in response:
-                    if chunk.choices[0].delta.content:
-                        yield chunk.choices[0].delta.content
-            else:
-                yield response.choices[0].message.content
+        # Estimate tokens (rough estimate: ~4 chars per token)
+        estimated_tokens = (len(prompt) + len(system_message or "")) // 4 + self.config.max_tokens
+        
+        # Wait if rate limit would be exceeded
+        await self.rate_limiter.wait_if_needed(estimated_tokens)
+        
+        async def _make_request():
+            try:
+                response = await self.client.chat.completions.create(
+                    model=self.config.model_name,
+                    messages=messages,
+                    temperature=self.config.temperature,
+                    max_completion_tokens=self.config.max_tokens,
+                    stream=stream
+                )
                 
+                if stream:
+                    async for chunk in response:
+                        if chunk.choices[0].delta.content:
+                            yield chunk.choices[0].delta.content
+                else:
+                    yield response.choices[0].message.content
+                    
+            except Exception as e:
+                if "rate_limit" in str(e).lower() or "429" in str(e):
+                    raise RateLimitError(f"Rate limit exceeded for {self.config.display_name}")
+                raise ProviderError(f"Error from {self.config.display_name}: {str(e)}")
+        
+        # Use retry logic
+        try:
+            async for chunk in retry_with_exponential_backoff(
+                _make_request,
+                self.rate_limiter.config
+            ):
+                yield chunk
+            
+            # Record successful request
+            self.rate_limiter.record_request(estimated_tokens)
         except Exception as e:
-            if "rate_limit" in str(e).lower():
-                raise RateLimitError(f"Rate limit exceeded for {self.config.display_name}")
-            raise ProviderError(f"Error from {self.config.display_name}: {str(e)}")
+            raise
 
 
 class ProviderFactory:
