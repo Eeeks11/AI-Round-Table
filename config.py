@@ -66,7 +66,7 @@ DEFAULT_MODELS: Dict[str, ModelConfig] = {
     ),
     "claude": ModelConfig(
         provider="anthropic",
-        model_name="claude-sonnet-4.5",
+        model_name="claude-sonnet-4-5-20250929",
         display_name="Claude Sonnet 4.5",
         api_key_env="ANTHROPIC_API_KEY",
     ),

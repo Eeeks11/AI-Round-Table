@@ -199,7 +199,39 @@ class DeliberationOrchestrator:
         )
         self.output_callback(f"{'='*80}\n", "header")
         
+        # Print API usage statistics
+        self._print_usage_stats()
+        
         return session
+    
+    def _print_usage_stats(self):
+        """Print API usage statistics for all providers."""
+        self.output_callback("\n📊 API Usage Statistics:", "info")
+        self.output_callback("─" * 80, "separator")
+        
+        for model_id, provider in self.providers.items():
+            stats = provider.rate_limiter.get_usage_stats()
+            model_name = self.model_configs[model_id].display_name
+            
+            rpm_pct = (stats['rpm'] / stats['rpm_limit']) * 100 if stats['rpm_limit'] > 0 else 0
+            tpm_pct = (stats['tpm'] / stats['tpm_limit']) * 100 if stats['tpm_limit'] > 0 else 0
+            rpd_pct = (stats['rpd'] / stats['rpd_limit']) * 100 if stats['rpd_limit'] > 0 else 0
+            
+            self.output_callback(f"\n{model_name}:", "info")
+            self.output_callback(
+                f"  RPM: {stats['rpm']}/{stats['rpm_limit']} ({rpm_pct:.1f}%)",
+                "info"
+            )
+            self.output_callback(
+                f"  TPM: {stats['tpm']:,}/{stats['tpm_limit']:,} ({tpm_pct:.1f}%)",
+                "info"
+            )
+            self.output_callback(
+                f"  RPD: {stats['rpd']}/{stats['rpd_limit']} ({rpd_pct:.1f}%)",
+                "info"
+            )
+        
+        self.output_callback("─" * 80 + "\n", "separator")
     
     async def _run_initial_round(self, question: str) -> DeliberationRound:
         """
@@ -333,7 +365,7 @@ class DeliberationOrchestrator:
         response_chunks = []
         
         try:
-            # Get response (streaming or not)
+            # Get response (streaming or not) - rate limiting handled by provider
             async for chunk in provider.generate_response(
                 prompt, system_message, stream=self.config.stream
             ):
@@ -350,25 +382,6 @@ class DeliberationOrchestrator:
                 model_id=model_id,
                 model_name=model_name,
                 response=full_response,
-                round_number=round_number
-            )
-            
-        except RateLimitError as e:
-            # Retry once after rate limit
-            self.output_callback(f"\n⚠ Rate limit hit, retrying in 5 seconds...", "warning")
-            await asyncio.sleep(5)
-            
-            # Retry
-            response_chunks = []
-            async for chunk in provider.generate_response(
-                prompt, system_message, stream=False
-            ):
-                response_chunks.append(chunk)
-            
-            return ModelResponse(
-                model_id=model_id,
-                model_name=model_name,
-                response="".join(response_chunks),
                 round_number=round_number
             )
             

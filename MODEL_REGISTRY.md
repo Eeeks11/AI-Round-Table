@@ -24,11 +24,11 @@ This document tracks all supported AI models and their configurations. Update th
 
 **Model ID**: `claude`
 - **Provider**: Anthropic
-- **Model Name**: `claude-sonnet-4.5`
+- **Model Name**: `claude-sonnet-4-5-20250929`
 - **Display Name**: Claude Sonnet 4.5
 - **API Key Environment Variable**: `ANTHROPIC_API_KEY`
 - **Status**: Active
-- **Last Updated**: 2025-11
+- **Last Updated**: 2025-11-21
 - **Notes**: Latest Sonnet 4.5 model with excellent reasoning
 
 **Alternative Claude Models**:
@@ -44,10 +44,12 @@ This document tracks all supported AI models and their configurations. Update th
 - **Display Name**: Gemini 3 Pro
 - **API Key Environment Variable**: `GOOGLE_API_KEY`
 - **Status**: Active
-- **Last Updated**: 2025-11
+- **Last Updated**: 2025-11-21
 - **Notes**: Latest Gemini 3 Pro model with enhanced capabilities
 
 **Alternative Gemini Models**:
+- `gemini-2.5-pro`: Gemini 2.5 Pro model
+- `gemini-2.5-flash`: Faster Gemini 2.5 model
 - `gemini-2.0-flash-exp`: Experimental Gemini 2.0 model
 - `gemini-1.5-pro`: Stable production model
 - `gemini-1.5-flash`: Faster, cost-effective option
