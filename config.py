@@ -72,8 +72,8 @@ DEFAULT_MODELS: Dict[str, ModelConfig] = {
     ),
     "gemini": ModelConfig(
         provider="google",
-        model_name="gemini-2.5-pro",
-        display_name="Gemini 2.5 Pro",
+        model_name="gemini-3-pro",
+        display_name="Gemini 3 Pro",
         api_key_env="GOOGLE_API_KEY",
     ),
     "grok": ModelConfig(
