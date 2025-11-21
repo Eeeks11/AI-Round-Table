@@ -165,18 +165,18 @@ async def retry_with_exponential_backoff(
     config: RateLimitConfig,
     *args,
     **kwargs
-) -> Any:
+):
     """
-    Retry a function with exponential backoff.
+    Retry an async generator function with exponential backoff.
     
     Args:
-        func: Async function to retry
+        func: Async generator function to retry
         config: Rate limit configuration
         *args: Arguments to pass to func
         **kwargs: Keyword arguments to pass to func
         
-    Returns:
-        Result from func
+    Yields:
+        Values from the async generator
         
     Raises:
         Last exception if all retries fail
@@ -185,7 +185,11 @@ async def retry_with_exponential_backoff(
     
     for attempt in range(config.max_retries):
         try:
-            return await func(*args, **kwargs)
+            # Call the async generator and iterate through its values
+            async for chunk in func(*args, **kwargs):
+                yield chunk
+            # If we successfully completed, break out of the retry loop
+            return
         except Exception as e:
             last_exception = e
             error_str = str(e).lower()
@@ -221,7 +225,8 @@ async def retry_with_exponential_backoff(
                 print(f"❌ All {config.max_retries} attempts failed")
     
     # Raise the last exception if all retries failed
-    raise last_exception
+    if last_exception:
+        raise last_exception
 
 
 class RateLimitManager:
