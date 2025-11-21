@@ -115,7 +115,7 @@ class OpenAIProvider(BaseProvider):
                 model=self.config.model_name,
                 messages=messages,
                 temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens,
+                max_completion_tokens=self.config.max_tokens,
                 stream=stream
             )
             
@@ -267,7 +267,7 @@ class GrokProvider(BaseProvider):
                 model=self.config.model_name,
                 messages=messages,
                 temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens,
+                max_completion_tokens=self.config.max_tokens,
                 stream=stream
             )
             

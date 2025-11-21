@@ -78,8 +78,8 @@ DEFAULT_MODELS: Dict[str, ModelConfig] = {
     ),
     "grok": ModelConfig(
         provider="grok",
-        model_name="grok-4.1-thinking",
-        display_name="Grok 4.1 Thinking",
+        model_name="grok-4-1-fast-reasoning",
+        display_name="Grok 4.1 Fast Reasoning",
         api_key_env="GROK_API_KEY",
     ),
 }
