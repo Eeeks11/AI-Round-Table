@@ -1,5 +1,7 @@
+# Environment variables
+.env
+
 # Python
-*.pyc
 __pycache__/
 *.py[cod]
 *$py.class
@@ -17,31 +19,18 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 
-# Environment
-.env
-.env.local
-.env.*.local
+# Virtual environments
 venv/
-ENV/
 env/
-
-# Logs (keep structure, ignore content)
-logs/*.jsonl
-!logs/.gitkeep
-
-# AI artifacts
-*.pyc
-pycache/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-htmlcov/
-.tox/
+ENV/
+env.bak/
+venv.bak/
 
 # IDE
 .vscode/
@@ -51,46 +40,23 @@ htmlcov/
 *~
 .DS_Store
 
-# OS
-.DS_Store
-Thumbs.db
-desktop.ini
+# Logs
+*.log
+logs/
 
-# Database
-*.db
-*.sqlite
-*.sqlite3
+# Output files
+deliberation_*.txt
+*.output
 
-# Arweave keys (future)
-arweave-keyfile.json
-*.keyfile
+# Jupyter
+.ipynb_checkpoints/
 
 # Testing
 .pytest_cache/
 .coverage
 htmlcov/
-.tox/
-.hypothesis/
 
-# Type checking
+# MyPy
 .mypy_cache/
 .dmypy.json
 dmypy.json
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# pyenv
-.python-version
-
-# Virtual environments
-venv/
-ENV/
-env/
-ENV.bak/
-venv.bak/
-
-# Project specific
-*.log
-temp/
-tmp/
