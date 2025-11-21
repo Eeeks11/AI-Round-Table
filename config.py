@@ -66,14 +66,14 @@ DEFAULT_MODELS: Dict[str, ModelConfig] = {
     ),
     "claude": ModelConfig(
         provider="anthropic",
-        model_name="claude-sonnet-4.5",
+        model_name="claude-sonnet-4-5-20250929",
         display_name="Claude Sonnet 4.5",
         api_key_env="ANTHROPIC_API_KEY",
     ),
     "gemini": ModelConfig(
         provider="google",
-        model_name="gemini-3-pro",
-        display_name="Gemini 3 Pro",
+        model_name="gemini-2.5-pro",
+        display_name="Gemini 2.5 Pro",
         api_key_env="GOOGLE_API_KEY",
     ),
     "grok": ModelConfig(
