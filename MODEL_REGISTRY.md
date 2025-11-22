@@ -40,15 +40,15 @@ This document tracks all supported AI models and their configurations. Update th
 
 **Model ID**: `gemini`
 - **Provider**: Google
-- **Model Name**: `gemini-3-pro`
-- **Display Name**: Gemini 3 Pro
+- **Model Name**: `gemini-2.5-pro`
+- **Display Name**: Gemini 2.5 Pro
 - **API Key Environment Variable**: `GOOGLE_API_KEY`
 - **Status**: Active
 - **Last Updated**: 2025-11-21
-- **Notes**: Latest Gemini 3 Pro model with enhanced capabilities
+- **Notes**: Gemini 2.5 Pro model with improved capabilities and better rate limit handling
 
 **Alternative Gemini Models**:
-- `gemini-2.5-pro`: Gemini 2.5 Pro model
+- `gemini-3-pro`: Latest Gemini 3 Pro model (previous default, may have strict rate limits)
 - `gemini-2.5-flash`: Faster Gemini 2.5 model
 - `gemini-2.0-flash-exp`: Experimental Gemini 2.0 model
 - `gemini-1.5-pro`: Stable production model
