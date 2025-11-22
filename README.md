@@ -29,6 +29,16 @@ A sophisticated Python application that orchestrates round-table discussions bet
 # Clone or download this repository
 cd multi-model-deliberation
 
+# Create virtual environment (one time)
+python -m venv venv
+
+# Activate it (every time you use the tool)
+# On Mac/Linux:
+source venv/bin/activate
+# On Windows:
+venv\Scripts\activate
+
+
 # Install dependencies
 pip install -r requirements.txt
 ```
