@@ -92,15 +92,25 @@ class RateLimiter:
         # Calculate wait time needed
         wait_time = 0
         
-        # Check RPM limit
-        if requests_this_minute >= self.config.requests_per_minute - 1:
+        # Check RPM limit (leave buffer of 2 requests)
+        buffer = 2 if self.config.requests_per_minute <= 15 else 1
+        if requests_this_minute >= self.config.requests_per_minute - buffer:
             oldest_request = self._requests_minute[0]
             wait_time = max(wait_time, 60 - (time.time() - oldest_request))
         
-        # Check TPM limit
-        if tokens_this_minute + estimated_tokens >= self.config.tokens_per_minute:
+        # Check TPM limit (leave 10% buffer)
+        if tokens_this_minute + estimated_tokens >= self.config.tokens_per_minute * 0.9:
             oldest_token = self._tokens_minute[0][0]
             wait_time = max(wait_time, 60 - (time.time() - oldest_token))
+        
+        # Add minimum spacing for low RPM limits (e.g., Gemini with 15 RPM)
+        # This spreads requests evenly: 15 RPM = 1 request every 4 seconds
+        if self.config.requests_per_minute <= 15 and self._requests_minute:
+            min_delay = 60.0 / self.config.requests_per_minute
+            time_since_last = time.time() - self._requests_minute[-1]
+            if time_since_last < min_delay:
+                spacing_wait = min_delay - time_since_last
+                wait_time = max(wait_time, spacing_wait)
         
         # Wait if needed
         if wait_time > 0:
@@ -148,9 +158,12 @@ DEFAULT_RATE_LIMITS: Dict[str, RateLimitConfig] = {
         requests_per_day=1000,
     ),
     "google": RateLimitConfig(
-        requests_per_minute=50,
-        tokens_per_minute=1000000,
-        requests_per_day=1000,
+        requests_per_minute=50,  # Gemini-2.5-pro: 50 RPM
+        tokens_per_minute=1000000,  # Gemini-2.5-pro: 1M TPM
+        requests_per_day=1000,  # Gemini-2.5-pro: 1K RPD
+        max_retries=5,  # More retries for rate limit errors
+        initial_retry_delay=3.0,  # Longer initial delay
+        max_retry_delay=120.0,  # Allow up to 2 minutes between retries
     ),
     "grok": RateLimitConfig(
         requests_per_minute=60,
@@ -165,18 +178,18 @@ async def retry_with_exponential_backoff(
     config: RateLimitConfig,
     *args,
     **kwargs
-) -> Any:
+):
     """
-    Retry a function with exponential backoff.
+    Retry an async generator function with exponential backoff.
     
     Args:
-        func: Async function to retry
+        func: Async generator function to retry
         config: Rate limit configuration
         *args: Arguments to pass to func
         **kwargs: Keyword arguments to pass to func
         
-    Returns:
-        Result from func
+    Yields:
+        Values from the async generator
         
     Raises:
         Last exception if all retries fail
@@ -185,7 +198,11 @@ async def retry_with_exponential_backoff(
     
     for attempt in range(config.max_retries):
         try:
-            return await func(*args, **kwargs)
+            # Call the async generator and iterate through its values
+            async for chunk in func(*args, **kwargs):
+                yield chunk
+            # If we successfully completed, break out of the retry loop
+            return
         except Exception as e:
             last_exception = e
             error_str = str(e).lower()
@@ -221,7 +238,8 @@ async def retry_with_exponential_backoff(
                 print(f"❌ All {config.max_retries} attempts failed")
     
     # Raise the last exception if all retries failed
-    raise last_exception
+    if last_exception:
+        raise last_exception
 
 
 class RateLimitManager:
