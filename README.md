@@ -52,7 +52,16 @@ GROK_API_KEY=your_grok_api_key_here
 
 **Note**: You only need API keys for the models you want to use. The system will automatically use all available models.
 
-### 3. Basic Usage
+### 3. Model Configuration (Optional)
+
+All model configurations are now centralized in `models.json`. To add, remove, or modify models, simply edit this file. See [`MODEL_CONFIG.md`](MODEL_CONFIG.md) for details.
+
+To validate your configuration:
+```bash
+python validate_models.py
+```
+
+### 4. Basic Usage
 
 ```bash
 # Simple deliberation
@@ -177,10 +186,14 @@ multi-model-deliberation/
 ├── consensus.py            # Consensus detection algorithms
 ├── prompts.py             # Prompt templates
 ├── config.py              # Configuration management
+├── models.json            # Model configurations (edit this!)
+├── validate_models.py     # Validation script for models.json
 ├── requirements.txt        # Python dependencies
 ├── .env.example           # Example environment variables
 ├── .env                   # Your API keys (create this)
-└── README.md              # This file
+├── README.md              # This file
+├── MODEL_CONFIG.md        # Model configuration guide
+└── MODELS_QUICK_START.md  # Quick reference for model config
 ```
 
 ### How It Works
@@ -215,16 +228,34 @@ A convergence score is calculated (0.0 to 1.0), and consensus is reached when it
 
 ## 🎨 Customization
 
-### Adding Custom Models
+### Adding or Modifying Models
 
-You can add support for additional models or providers:
+**Easy Way**: All model configurations are in `models.json` - just edit this one file! See [`MODEL_CONFIG.md`](MODEL_CONFIG.md) for complete details.
+
+Example - Add a new model to `models.json`:
+
+```json
+{
+  "id": "gpt35",
+  "provider": "openai",
+  "model_name": "gpt-3.5-turbo",
+  "display_name": "GPT-3.5 Turbo",
+  "api_key_env": "OPENAI_API_KEY",
+  "temperature": 0.7,
+  "max_tokens": 1500,
+  "enabled": true
+}
+```
+
+### Adding Custom Providers
+
+To support a completely new AI provider (beyond OpenAI, Anthropic, Google, Grok):
 
 ```python
 # In your code or a custom module
-from config import add_custom_model, ModelConfig
 from providers import BaseProvider, ProviderFactory
 
-# Create a custom provider
+# Create a custom provider class
 class CustomProvider(BaseProvider):
     async def generate_response(self, prompt, system_message=None, stream=True):
         # Your implementation
@@ -232,31 +263,18 @@ class CustomProvider(BaseProvider):
 
 # Register it
 ProviderFactory.register_provider("custom", CustomProvider)
-
-# Add model configuration
-add_custom_model("custom_model", ModelConfig(
-    provider="custom",
-    model_name="model-name",
-    display_name="My Custom Model",
-    api_key_env="CUSTOM_API_KEY"
-))
 ```
 
-### Modifying Model Configurations
+Then add your model to `models.json`:
 
-Edit `config.py` to modify default model configurations:
-
-```python
-DEFAULT_MODELS = {
-    "gpt4": ModelConfig(
-        provider="openai",
-        model_name="gpt-4-turbo-preview",  # Change model version
-        display_name="GPT-4 Turbo",
-        api_key_env="OPENAI_API_KEY",
-        temperature=0.7,  # Adjust temperature
-        max_tokens=2000,  # Adjust token limit
-    ),
-    # ... other models
+```json
+{
+  "id": "my-model",
+  "provider": "custom",
+  "model_name": "model-name",
+  "display_name": "My Custom Model",
+  "api_key_env": "CUSTOM_API_KEY",
+  "enabled": true
 }
 ```
 

@@ -5,6 +5,20 @@ All notable changes to the Multi-Model AI Deliberation System will be documented
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **BREAKING**: Model configurations now centralized in `models.json` file
+  - Edit `models.json` to add/remove/modify models (instead of editing `config.py` and `providers.py`)
+  - See `MODEL_CONFIG.md` for detailed configuration guide
+  - Migration: Your existing `.env` API keys remain unchanged
+  - Benefits: Single file to edit, no Python code changes needed, easier to maintain
+
+### Added
+- New `MODEL_CONFIG.md` documentation for model configuration
+- JSON-based model configuration system for easier customization
+- Support for per-model configuration without code changes
+
 ## [1.0.0] - 2024-11-21
 
 ### Added

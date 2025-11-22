@@ -1,0 +1,71 @@
+{
+  "models": [
+    {
+      "id": "gpt4",
+      "provider": "openai",
+      "model_name": "gpt-5.1",
+      "display_name": "GPT-5.1",
+      "api_key_env": "OPENAI_API_KEY",
+      "temperature": 0.7,
+      "max_tokens": 2000,
+      "timeout": 60,
+      "enabled": true
+    },
+    {
+      "id": "claude",
+      "provider": "anthropic",
+      "model_name": "claude-sonnet-4-5-20250929",
+      "display_name": "Claude Sonnet 4.5",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "temperature": 0.7,
+      "max_tokens": 2000,
+      "timeout": 60,
+      "enabled": true
+    },
+    {
+      "id": "gemini",
+      "provider": "google",
+      "model_name": "gemini-2.5-pro",
+      "display_name": "Gemini 2.5 Pro",
+      "api_key_env": "GOOGLE_API_KEY",
+      "temperature": 0.7,
+      "max_tokens": 2000,
+      "timeout": 60,
+      "enabled": true
+    },
+    {
+      "id": "grok",
+      "provider": "grok",
+      "model_name": "grok-4-1-fast-reasoning",
+      "display_name": "Grok 4.1 Fast Reasoning",
+      "api_key_env": "GROK_API_KEY",
+      "temperature": 0.7,
+      "max_tokens": 2000,
+      "timeout": 60,
+      "enabled": true
+    }
+  ],
+  "providers": {
+    "openai": {
+      "class": "OpenAIProvider",
+      "package": "openai",
+      "install_command": "pip install openai"
+    },
+    "anthropic": {
+      "class": "AnthropicProvider",
+      "package": "anthropic",
+      "install_command": "pip install anthropic"
+    },
+    "google": {
+      "class": "GoogleProvider",
+      "package": "google-generativeai",
+      "install_command": "pip install google-generativeai"
+    },
+    "grok": {
+      "class": "GrokProvider",
+      "package": "openai",
+      "install_command": "pip install openai",
+      "note": "Grok uses OpenAI-compatible API"
+    }
+  }
+}
