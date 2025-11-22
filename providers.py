@@ -232,6 +232,16 @@ class GoogleProvider(BaseProvider):
         """Initialize Google provider."""
         super().__init__(config)
         
+        # Override rate limiter with model-specific config
+        if "flash" in config.model_name.lower():
+            rate_limit_config = DEFAULT_RATE_LIMITS["gemini_flash"]
+        elif "pro" in config.model_name.lower():
+            rate_limit_config = DEFAULT_RATE_LIMITS["gemini_pro"]
+        else:
+            rate_limit_config = DEFAULT_RATE_LIMITS["google"]
+            
+        self.rate_limiter = RateLimiter(rate_limit_config)
+        
         try:
             import google.generativeai as genai
             genai.configure(api_key=self.api_key)
@@ -260,8 +270,8 @@ class GoogleProvider(BaseProvider):
         if system_message:
             full_prompt = f"{system_message}\n\n{prompt}"
         
-        # Estimate tokens (rough estimate: ~4 chars per token)
-        estimated_tokens = len(full_prompt) // 4 + self.config.max_tokens
+        # Estimate tokens (conservative estimate: ~3 chars per token to be safe)
+        estimated_tokens = len(full_prompt) // 3 + self.config.max_tokens
         
         # Wait if rate limit would be exceeded
         await self.rate_limiter.wait_if_needed(estimated_tokens)

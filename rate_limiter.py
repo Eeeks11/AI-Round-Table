@@ -158,12 +158,28 @@ DEFAULT_RATE_LIMITS: Dict[str, RateLimitConfig] = {
         requests_per_day=1000,
     ),
     "google": RateLimitConfig(
-        requests_per_minute=50,  # Gemini-2.5-pro: 50 RPM
-        tokens_per_minute=1000000,  # Gemini-2.5-pro: 1M TPM
-        requests_per_day=1000,  # Gemini-2.5-pro: 1K RPD
-        max_retries=5,  # More retries for rate limit errors
-        initial_retry_delay=3.0,  # Longer initial delay
-        max_retry_delay=120.0,  # Allow up to 2 minutes between retries
+        requests_per_minute=2,  # Default to safest limit (Pro Free)
+        tokens_per_minute=32000,
+        requests_per_day=50,
+        max_retries=5,
+        initial_retry_delay=5.0,
+        max_retry_delay=120.0,
+    ),
+    "gemini_pro": RateLimitConfig(
+        requests_per_minute=2,   # Strict Pro Limit (Free/Preview)
+        tokens_per_minute=32000, # Strict TPM
+        requests_per_day=50,
+        max_retries=5,
+        initial_retry_delay=10.0, # Longer delay for strict limits
+        max_retry_delay=300.0,
+    ),
+    "gemini_flash": RateLimitConfig(
+        requests_per_minute=15,  # Flash Limit (Free)
+        tokens_per_minute=1000000,
+        requests_per_day=1500,
+        max_retries=5,
+        initial_retry_delay=5.0,
+        max_retry_delay=120.0,
     ),
     "grok": RateLimitConfig(
         requests_per_minute=60,
