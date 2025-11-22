@@ -1,6 +1,8 @@
 """Configuration management for multi-model deliberation system."""
 
 import os
+import json
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
@@ -56,33 +58,39 @@ class DeliberationConfig:
             raise ValueError("Consensus threshold must be between 0.5 and 1.0")
 
 
-# Default model configurations
-DEFAULT_MODELS: Dict[str, ModelConfig] = {
-    "gpt4": ModelConfig(
-        provider="openai",
-        model_name="gpt-5.1",
-        display_name="GPT-5.1",
-        api_key_env="OPENAI_API_KEY",
-    ),
-    "claude": ModelConfig(
-        provider="anthropic",
-        model_name="claude-sonnet-4-5-20250929",
-        display_name="Claude Sonnet 4.5",
-        api_key_env="ANTHROPIC_API_KEY",
-    ),
-    "gemini": ModelConfig(
-        provider="google",
-        model_name="gemini-2.5-pro",
-        display_name="Gemini 2.5 Pro",
-        api_key_env="GOOGLE_API_KEY",
-    ),
-    "grok": ModelConfig(
-        provider="grok",
-        model_name="grok-4-1-fast-reasoning",
-        display_name="Grok 4.1 Fast Reasoning",
-        api_key_env="GROK_API_KEY",
-    ),
-}
+def _load_models_from_json() -> Dict[str, ModelConfig]:
+    """
+    Load model configurations from models.json file.
+    
+    Returns:
+        Dictionary of model configurations
+    """
+    config_file = Path(__file__).parent / "models.json"
+    
+    if not config_file.exists():
+        raise FileNotFoundError(
+            f"Model configuration file not found: {config_file}\n"
+            "Please create a models.json file with your model configurations."
+        )
+    
+    try:
+        with open(config_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        models = {}
+        for model_data in data.get("models", []):
+            model_id = model_data.pop("id")
+            models[model_id] = ModelConfig(**model_data)
+        
+        return models
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON in models.json: {e}")
+    except TypeError as e:
+        raise ValueError(f"Invalid model configuration in models.json: {e}")
+
+
+# Load model configurations from JSON
+DEFAULT_MODELS: Dict[str, ModelConfig] = _load_models_from_json()
 
 
 def get_available_models(requested_models: Optional[List[str]] = None) -> Dict[str, ModelConfig]:
