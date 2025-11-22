@@ -158,9 +158,9 @@ DEFAULT_RATE_LIMITS: Dict[str, RateLimitConfig] = {
         requests_per_day=1000,
     ),
     "google": RateLimitConfig(
-        requests_per_minute=15,  # Gemini free tier: 15 RPM
-        tokens_per_minute=1000000,  # Gemini free tier: 1M TPM
-        requests_per_day=1500,  # Gemini free tier: 1,500 RPD
+        requests_per_minute=50,  # Gemini-3-pro: 50 RPM
+        tokens_per_minute=1000000,  # Gemini-3-pro: 1M TPM
+        requests_per_day=1000,  # Gemini-3-pro: 1K RPD
         max_retries=5,  # More retries for rate limit errors
         initial_retry_delay=3.0,  # Longer initial delay
         max_retry_delay=120.0,  # Allow up to 2 minutes between retries
