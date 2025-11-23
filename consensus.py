@@ -64,9 +64,9 @@ class ConsensusDetector:
         convergence_score = self._calculate_convergence(responses_by_round, model_names)
         
         # Determine agreement level
-        if convergence_score >= 0.8:
+        if convergence_score >= 0.75:
             agreement_level = "high"
-        elif convergence_score >= 0.6:
+        elif convergence_score >= 0.55:
             agreement_level = "medium"
         else:
             agreement_level = "low"
@@ -103,25 +103,37 @@ class ConsensusDetector:
             Convergence score between 0.0 and 1.0
         """
         scores = []
+        weights = []
         
-        # Check if models are referencing each other more over time
-        reference_score = self._calculate_cross_reference_score(responses_by_round, model_names)
-        scores.append(reference_score)
-        
-        # Check if response lengths are stabilizing
-        stability_score = self._calculate_stability_score(responses_by_round, model_names)
-        scores.append(stability_score)
-        
-        # Check for common keywords and phrases
-        keyword_score = self._calculate_keyword_overlap(responses_by_round[-1])
-        scores.append(keyword_score)
-        
-        # Check for agreement language
+        # Check for explicit consensus/agreement language (high weight)
         agreement_score = self._calculate_agreement_language_score(responses_by_round[-1])
         scores.append(agreement_score)
+        weights.append(2.5)  # Highest weight - explicit agreement is strong signal
         
-        # Average all scores
-        return sum(scores) / len(scores)
+        # Check for consistent core answers (high weight)
+        core_answer_score = self._calculate_core_answer_consistency(responses_by_round[-1])
+        scores.append(core_answer_score)
+        weights.append(2.0)  # High weight - semantic consistency matters most
+        
+        # Check if models are referencing each other more over time (medium-high weight)
+        reference_score = self._calculate_cross_reference_score(responses_by_round, model_names)
+        scores.append(reference_score)
+        weights.append(1.5)  # Medium-high weight
+        
+        # Check if response lengths are stabilizing (medium weight)
+        stability_score = self._calculate_stability_score(responses_by_round, model_names)
+        scores.append(stability_score)
+        weights.append(1.0)  # Medium weight
+        
+        # Check for common keywords and phrases (low weight)
+        keyword_score = self._calculate_keyword_overlap(responses_by_round[-1])
+        scores.append(keyword_score)
+        weights.append(0.5)  # Low weight - vocabulary can differ even with agreement
+        
+        # Calculate weighted average
+        total_weight = sum(weights)
+        weighted_sum = sum(s * w for s, w in zip(scores, weights))
+        return weighted_sum / total_weight
     
     def _calculate_cross_reference_score(
         self,
@@ -207,22 +219,36 @@ class ConsensusDetector:
         agreement_patterns = [
             r'\bagree\b', r'\bconsensus\b', r'\bconcur\b',
             r'\bsimilarly\b', r'\blikewise\b', r'\balign\b',
-            r'\bshared view\b', r'\bcommon ground\b'
+            r'\bshared view\b', r'\bcommon ground\b',
+            r'\bstrong alignment\b', r'\bfully endorse\b',
+            r'\bsame conclusion\b', r'\bno disagreement\b',
+            r'\bcomplete agreement\b', r'\bunanimously\b'
         ]
         
         total_score = 0
+        num_with_agreement = 0
+        
         for response in responses.values():
             response_lower = response.lower()
             matches = sum(
                 len(re.findall(pattern, response_lower))
                 for pattern in agreement_patterns
             )
-            # Normalize by response length (per 100 words)
-            words = len(response_lower.split())
-            if words > 0:
-                total_score += min(matches / (words / 100), 1.0)
+            
+            if matches > 0:
+                num_with_agreement += 1
+                # Cap individual score at 1.0 to avoid over-weighting verbose responses
+                words = len(response_lower.split())
+                if words > 0:
+                    # Higher density of agreement language = higher score
+                    score = min(matches / max(words / 200, 1.0), 1.0)
+                    total_score += score
         
-        return total_score / len(responses) if responses else 0.0
+        # If most models show agreement language, boost the score
+        if num_with_agreement >= len(responses) * 0.6:  # 60% or more
+            total_score *= 1.2
+        
+        return min(total_score / len(responses), 1.0) if responses else 0.0
     
     def _extract_keywords(self, text: str) -> List[str]:
         """
@@ -282,6 +308,76 @@ class ConsensusDetector:
         
         # Return top themes
         return sorted(common_themes, key=lambda k: keyword_counts[k], reverse=True)[:5]
+    
+    def _calculate_core_answer_consistency(self, responses: Dict[str, str]) -> float:
+        """
+        Calculate consistency of core answers across responses.
+        Looks for consistent YES/NO answers or shared conclusion patterns.
+        
+        Args:
+            responses: Dictionary of model responses
+            
+        Returns:
+            Consistency score between 0.0 and 1.0
+        """
+        if len(responses) < 2:
+            return 0.5
+        
+        # Extract initial answer patterns from each response
+        answer_patterns = []
+        
+        for response in responses.values():
+            response_lower = response.lower()
+            # Get first 300 chars where the core answer usually is
+            initial_text = response_lower[:300]
+            
+            # Detect affirmative/negative/neutral patterns
+            yes_score = sum([
+                initial_text.count('yes'),
+                initial_text.count('correct'),
+                initial_text.count('true'),
+                initial_text.count('i can'),
+                initial_text.count('i am able')
+            ])
+            
+            no_score = sum([
+                initial_text.count('no'),
+                initial_text.count('not'),
+                initial_text.count('cannot'),
+                initial_text.count('unable'),
+                initial_text.count('don\'t'),
+                initial_text.count('do not')
+            ])
+            
+            maybe_score = sum([
+                initial_text.count('depends'),
+                initial_text.count('partially'),
+                initial_text.count('sometimes'),
+                initial_text.count('it varies')
+            ])
+            
+            # Classify the answer
+            max_score = max(yes_score, no_score, maybe_score)
+            if max_score == 0:
+                answer_patterns.append('neutral')
+            elif yes_score == max_score:
+                answer_patterns.append('yes')
+            elif no_score == max_score:
+                answer_patterns.append('no')
+            else:
+                answer_patterns.append('maybe')
+        
+        # Calculate consistency: how many responses have the same pattern
+        from collections import Counter
+        pattern_counts = Counter(answer_patterns)
+        most_common_count = pattern_counts.most_common(1)[0][1] if pattern_counts else 0
+        consistency_ratio = most_common_count / len(answer_patterns)
+        
+        # Bonus for unanimous agreement
+        if consistency_ratio == 1.0:
+            return 1.0
+        
+        return consistency_ratio
     
     def _find_disagreements(self, responses: Dict[str, str]) -> List[str]:
         """
