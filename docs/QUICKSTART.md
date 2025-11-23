@@ -4,9 +4,34 @@ Get up and running with the Multi-Model AI Deliberation System in 5 minutes!
 
 ## 🚀 Fast Setup
 
-### Step 1: Install Dependencies (30 seconds)
+### Step 1: Set Up Virtual Environment (1 minute)
+
+**Recommended**: Use a virtual environment to isolate dependencies.
 
 ```bash
+# Navigate to project directory
+cd multi-model-deliberation
+
+# Create virtual environment
+python3 -m venv venv
+
+# Activate it
+# On Linux/macOS:
+source venv/bin/activate
+
+# On Windows (CMD):
+venv\Scripts\activate.bat
+
+# On Windows (PowerShell):
+venv\Scripts\Activate.ps1
+```
+
+You should see `(venv)` in your prompt when activated.
+
+### Step 2: Install Dependencies (30 seconds)
+
+```bash
+# With virtual environment activated
 pip install -r requirements.txt
 ```
 
@@ -18,7 +43,7 @@ This installs:
 - `aiohttp` - For async HTTP requests
 - `colorama` - For colored terminal output
 
-### Step 2: Configure API Keys (2 minutes)
+### Step 3: Configure API Keys (2 minutes)
 
 ```bash
 # Copy the example environment file
@@ -37,7 +62,7 @@ GOOGLE_API_KEY=AIza...             # Get from: https://makersuite.google.com/app
 GROK_API_KEY=xai-...               # Get from: https://x.ai/
 ```
 
-### Step 3: Verify Setup (10 seconds)
+### Step 4: Verify Setup (10 seconds)
 
 ```bash
 python deliberate.py --status
@@ -54,7 +79,7 @@ Grok Beta            (grok   ): ❌ Unavailable (missing API key)
 ============================================================
 ```
 
-### Step 4: Run Your First Deliberation! (1 minute)
+### Step 5: Run Your First Deliberation! (1 minute)
 
 ```bash
 python deliberate.py "What are the key principles of good software architecture?"
@@ -159,6 +184,37 @@ python deliberate.py "How do neural networks learn?" --rounds 5 --verbose
 
 ## 🔧 Troubleshooting
 
+### ❌ Virtual Environment Issues
+
+**Problem**: `python3: command not found` or `python: command not found`
+
+**Solution**: 
+- On Windows, use `python` instead of `python3`
+- On Mac/Linux, try both `python` and `python3`
+- Ensure Python 3.8+ is installed: `python --version`
+
+**Problem**: PowerShell script execution error on Windows
+
+**Solution**:
+```powershell
+# Run this in PowerShell as Administrator
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+**Problem**: Virtual environment not activating
+
+**Solution**:
+- Check you're in the correct directory
+- Verify the `venv` folder exists
+- Try creating it again: `python3 -m venv venv --clear`
+
+**Problem**: How to deactivate virtual environment
+
+**Solution**:
+```bash
+deactivate  # Works on all platforms
+```
+
 ### ❌ "No models available"
 
 **Problem**: No API keys configured
@@ -174,10 +230,15 @@ nano .env
 
 ### ❌ "ModuleNotFoundError: No module named 'openai'"
 
-**Problem**: Dependencies not installed
+**Problem**: Dependencies not installed or virtual environment not activated
 
 **Solution**:
 ```bash
+# Make sure virtual environment is activated (you should see (venv) in prompt)
+source venv/bin/activate  # Linux/macOS
+venv\Scripts\activate.bat  # Windows
+
+# Then install dependencies
 pip install -r requirements.txt
 
 # Or install individually

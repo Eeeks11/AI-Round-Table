@@ -93,6 +93,8 @@ The main `README.md` has been updated to:
 - Include a documentation section linking to all guides
 - Show the new, cleaner project structure
 - Update all internal documentation links
+- Add comprehensive virtual environment setup instructions with multiple options (venv, virtualenv, conda)
+- Include troubleshooting tips for virtual environment issues
 
 ## Benefits
 

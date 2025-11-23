@@ -25,22 +25,82 @@ A sophisticated Python application that orchestrates round-table discussions bet
 
 ### 1. Installation
 
+#### Step 1: Clone the Repository
+
 ```bash
 # Clone or download this repository
 cd multi-model-deliberation
+```
 
-# Create virtual environment (one time)
-python -m venv venv
+#### Step 2: Set Up Virtual Environment
 
-# Activate it (every time you use the tool)
-# On Mac/Linux:
+A virtual environment isolates the project's dependencies from your system Python installation. This is **highly recommended** to avoid conflicts.
+
+**Option A: Using venv (Recommended - Built into Python 3.8+)**
+
+```bash
+# Create virtual environment
+python3 -m venv venv
+
+# Activate the virtual environment
+# On Linux/macOS:
 source venv/bin/activate
-# On Windows:
-venv\Scripts\activate
 
+# On Windows (Command Prompt):
+venv\Scripts\activate.bat
 
-# Install dependencies
+# On Windows (PowerShell):
+venv\Scripts\Activate.ps1
+```
+
+**Option B: Using virtualenv**
+
+```bash
+# Install virtualenv if not already installed
+pip install virtualenv
+
+# Create virtual environment
+virtualenv venv
+
+# Activate (same as above)
+source venv/bin/activate  # Linux/macOS
+venv\Scripts\activate.bat  # Windows CMD
+```
+
+**Option C: Using conda**
+
+```bash
+# Create conda environment
+conda create -n deliberation python=3.11
+
+# Activate conda environment
+conda activate deliberation
+```
+
+**Verify Virtual Environment is Active**
+
+When activated, you should see `(venv)` or `(deliberation)` at the beginning of your command prompt:
+
+```bash
+(venv) user@computer:~/multi-model-deliberation$
+```
+
+**Troubleshooting Virtual Environment**
+
+- **PowerShell Execution Policy Error**: Run `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
+- **python3 command not found**: Try `python` instead of `python3`
+- **To deactivate**: Simply run `deactivate` in your terminal
+
+#### Step 3: Install Dependencies
+
+With your virtual environment activated:
+
+```bash
+# Install all required packages
 pip install -r requirements.txt
+
+# Verify installation
+python test_installation.py
 ```
 
 ### 2. Configuration
