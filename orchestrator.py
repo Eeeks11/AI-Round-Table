@@ -350,6 +350,8 @@ class DeliberationOrchestrator:
     ) -> ModelResponse:
         """
         Get response from a single model with tool support.
+        Implements multi-turn tool calling: model requests tools, we execute them,
+        and send results back for the model to formulate a final response.
         
         Args:
             model_id: Model identifier
@@ -367,15 +369,19 @@ class DeliberationOrchestrator:
             self.output_callback(f"\n[{model_name}]", "model_name")
         
         response_text_chunks = []
-        tool_results = []
+        conversation_history = []  # Track the conversation with tool calls
         
         try:
             # Get tool definitions
             tools = self.tool_registry.get_tool_definitions()
             
+            # Initial request
+            current_prompt = prompt
+            tool_calls_made = []
+            
             # Get response with tool support - rate limiting handled by provider
             async for chunk in provider.generate_response(
-                prompt, system_message, stream=self.config.stream, tools=tools
+                current_prompt, system_message, stream=self.config.stream, tools=tools
             ):
                 # Handle text chunks
                 if chunk.text:
@@ -385,28 +391,60 @@ class DeliberationOrchestrator:
                 
                 # Handle tool calls
                 if chunk.tool_calls:
-                    for tool_call in chunk.tool_calls:
-                        if not self.config.summary_only:
-                            print(f"\n🔧 Using tool: {tool_call.name}({tool_call.arguments})", flush=True)
-                        
-                        # Execute the tool
-                        tool_result = await self.tool_registry.execute_tool(
-                            tool_call.name,
-                            tool_call.arguments
-                        )
-                        
-                        tool_results.append(f"\n[Tool: {tool_call.name}]\n{tool_result}\n")
-                        
-                        if not self.config.summary_only:
-                            print(f"✓ Tool result received\n", flush=True)
+                    tool_calls_made.extend(chunk.tool_calls)
+            
+            # If tools were called, execute them and get a follow-up response
+            if tool_calls_made:
+                tool_results_text = []
+                
+                for tool_call in tool_calls_made:
+                    if not self.config.summary_only:
+                        print(f"\n🔧 Using tool: {tool_call.name}({tool_call.arguments})", flush=True)
+                    
+                    # Execute the tool
+                    tool_result = await self.tool_registry.execute_tool(
+                        tool_call.name,
+                        tool_call.arguments
+                    )
+                    
+                    tool_results_text.append(f"Tool '{tool_call.name}' result: {tool_result}")
+                    
+                    if not self.config.summary_only:
+                        print(f"✓ Tool result received\n", flush=True)
+                
+                # Create a follow-up prompt with tool results
+                initial_response = "".join(response_text_chunks).strip()
+                tool_results_combined = "\n\n".join(tool_results_text)
+                
+                follow_up_prompt = f"""You previously requested to use tools to answer this question:
+{prompt}
+
+Tool Results:
+{tool_results_combined}
+
+Now, please provide a clear, direct answer to the question based on these tool results. Be concise and specific."""
+                
+                # Clear the response chunks for the follow-up
+                response_text_chunks = []
+                
+                # Get follow-up response WITHOUT tools (to avoid loops)
+                async for chunk in provider.generate_response(
+                    follow_up_prompt, system_message, stream=self.config.stream, tools=None
+                ):
+                    if chunk.text:
+                        response_text_chunks.append(chunk.text)
+                        if self.config.stream and not self.config.summary_only:
+                            print(chunk.text, end='', flush=True)
             
             if not self.config.summary_only:
                 print()  # Newline after streaming
             
-            # Combine text response with tool results
-            full_response = "".join(response_text_chunks)
-            if tool_results:
-                full_response += "\n\n" + "".join(tool_results)
+            # Return the final response
+            full_response = "".join(response_text_chunks).strip()
+            
+            # If somehow we still have no text, add the tool results directly
+            if not full_response and tool_calls_made:
+                full_response = "Tool results: " + "\n".join(tool_results_text)
             
             return ModelResponse(
                 model_id=model_id,
@@ -453,8 +491,9 @@ class DeliberationOrchestrator:
         tools = self.tool_registry.get_tool_definitions()
         
         response_text_chunks = []
-        tool_results = []
+        tool_calls_made = []
         
+        # Initial synthesis request
         async for chunk in provider.generate_response(
             prompt, system_message, stream=self.config.stream, tools=tools
         ):
@@ -466,24 +505,55 @@ class DeliberationOrchestrator:
             
             # Handle tool calls
             if chunk.tool_calls:
-                for tool_call in chunk.tool_calls:
-                    print(f"\n🔧 Using tool: {tool_call.name}({tool_call.arguments})", flush=True)
-                    
-                    # Execute the tool
-                    tool_result = await self.tool_registry.execute_tool(
-                        tool_call.name,
-                        tool_call.arguments
-                    )
-                    
-                    tool_results.append(f"\n[Tool: {tool_call.name}]\n{tool_result}\n")
-                    print(f"✓ Tool result received\n", flush=True)
+                tool_calls_made.extend(chunk.tool_calls)
+        
+        # If tools were called, execute them and get a follow-up response
+        if tool_calls_made:
+            tool_results_text = []
+            
+            for tool_call in tool_calls_made:
+                print(f"\n🔧 Using tool: {tool_call.name}({tool_call.arguments})", flush=True)
+                
+                # Execute the tool
+                tool_result = await self.tool_registry.execute_tool(
+                    tool_call.name,
+                    tool_call.arguments
+                )
+                
+                tool_results_text.append(f"Tool '{tool_call.name}' result: {tool_result}")
+                print(f"✓ Tool result received\n", flush=True)
+            
+            # Create a follow-up prompt with tool results
+            tool_results_combined = "\n\n".join(tool_results_text)
+            
+            follow_up_prompt = f"""You are synthesizing a consensus answer for this question:
+{question}
+
+Based on the models' responses, you requested tool data. Here are the tool results:
+{tool_results_combined}
+
+Now, please provide a clear, final consensus answer based on these tool results and the previous model responses. Be concise and specific."""
+            
+            # Clear the response chunks for the follow-up
+            response_text_chunks = []
+            
+            # Get follow-up response WITHOUT tools
+            async for chunk in provider.generate_response(
+                follow_up_prompt, system_message, stream=self.config.stream, tools=None
+            ):
+                if chunk.text:
+                    response_text_chunks.append(chunk.text)
+                    if self.config.stream:
+                        print(chunk.text, end='', flush=True)
         
         print()  # Newline after streaming
         
-        # Combine text response with tool results
-        full_response = "".join(response_text_chunks)
-        if tool_results:
-            full_response += "\n\n" + "".join(tool_results)
+        # Return the final response
+        full_response = "".join(response_text_chunks).strip()
+        
+        # If somehow we still have no text, add the tool results directly
+        if not full_response and tool_calls_made:
+            full_response = "Tool results: " + "\n".join(tool_results_text)
         
         return full_response
     
