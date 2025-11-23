@@ -185,20 +185,20 @@ DEFAULT_RATE_LIMITS: Dict[str, RateLimitConfig] = {
         max_retry_delay=120.0,
     ),
     "gemini_pro": RateLimitConfig(
-        requests_per_minute=2,   # Strict Pro Limit (Free/Preview)
-        tokens_per_minute=32000, # Strict TPM
-        requests_per_day=50,
-        max_retries=5,
-        initial_retry_delay=60.0, # Increase initial delay significantly
-        max_retry_delay=300.0,
+        requests_per_minute=360,  # PAYG Pro Limit
+        tokens_per_minute=2000000, # PAYG TPM
+        requests_per_day=30000,   # High daily limit
+        max_retries=10,           # High retries for stability
+        initial_retry_delay=2.0,  # Standard delay
+        max_retry_delay=60.0,
     ),
     "gemini_flash": RateLimitConfig(
-        requests_per_minute=15,  # Flash Limit (Free)
-        tokens_per_minute=1000000,
-        requests_per_day=1500,
-        max_retries=5,
-        initial_retry_delay=5.0,
-        max_retry_delay=120.0,
+        requests_per_minute=1000, # PAYG Flash Limit
+        tokens_per_minute=4000000,
+        requests_per_day=50000,
+        max_retries=10,
+        initial_retry_delay=2.0,
+        max_retry_delay=60.0,
     ),
     "grok": RateLimitConfig(
         requests_per_minute=60,
