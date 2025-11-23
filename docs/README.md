@@ -14,6 +14,7 @@ This directory contains user-facing documentation for the Multi-Model AI Deliber
 - **[MODEL_REGISTRY.md](MODEL_REGISTRY.md)** - Registry of all supported models and their specifications
 
 ### Advanced Topics
+- **[INTERNET_ACCESS.md](INTERNET_ACCESS.md)** - Enable web search and real-time data access
 - **[RATE_LIMITING.md](RATE_LIMITING.md)** - Understanding and configuring API rate limits
 - **[DEVELOPER_NOTES.md](DEVELOPER_NOTES.md)** - Technical details for developers and contributors
 
@@ -25,6 +26,9 @@ This directory contains user-facing documentation for the Multi-Model AI Deliber
 
 ### I want to start using the system
 → Start with [QUICKSTART.md](QUICKSTART.md)
+
+### I want models to search the web and access current information
+→ Read [INTERNET_ACCESS.md](INTERNET_ACCESS.md)
 
 ### I want to add or modify AI models
 → Read [MODEL_CONFIG.md](MODEL_CONFIG.md) and [MODELS_QUICK_START.md](MODELS_QUICK_START.md)

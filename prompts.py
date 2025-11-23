@@ -19,11 +19,17 @@ class PromptTemplate:
         """
         return f"""You are participating in a multi-model AI deliberation session. Multiple AI models (including yourself) will analyze the same question and discuss it over several rounds.
 
+IMPORTANT: You have access to tools for:
+- Searching the web for current information (prices, news, products, etc.)
+- Getting the current date/time in any timezone
+
+Use these tools whenever you need up-to-date information that may not be in your training data.
+
 Your task is to provide a thoughtful, well-reasoned analysis of the following question:
 
 {question}
 
-Please provide your initial analysis. Be clear, comprehensive, and explain your reasoning."""
+Please provide your initial analysis. Be clear, comprehensive, and explain your reasoning. Use the available tools to gather current information when relevant."""
     
     @staticmethod
     def deliberation_prompt(
@@ -49,6 +55,12 @@ Please provide your initial analysis. Be clear, comprehensive, and explain your 
         
         return f"""You are in Round {round_number} of a multi-model AI deliberation session.
 
+IMPORTANT: You have access to tools for:
+- Searching the web for current information (prices, news, products, etc.)
+- Getting the current date/time in any timezone
+
+Use these tools to verify claims, gather additional data, or check current information.
+
 ORIGINAL QUESTION:
 {question}
 
@@ -60,8 +72,9 @@ YOUR TASK:
 1. Consider the perspectives shared by other AI models above
 2. Identify points of agreement and disagreement
 3. Reflect on whether other models raised valid points you hadn't considered
-4. Refine your analysis based on this collective discussion
-5. Provide your updated perspective
+4. Use the available tools to verify any claims or gather additional current information
+5. Refine your analysis based on this collective discussion and any new data
+6. Provide your updated perspective
 
 Please be constructive and focus on reaching a well-reasoned consensus while maintaining intellectual honesty. If you disagree with other models, explain why clearly."""
     
@@ -123,6 +136,12 @@ Respond with: CONSENSUS or NO_CONSENSUS"""
         
         return f"""Synthesize a consensus answer from the following multi-model deliberation.
 
+IMPORTANT: You have access to tools for:
+- Searching the web for current information
+- Getting the current date/time in any timezone
+
+Use these tools if you need to verify any final details or get the latest information for your synthesis.
+
 QUESTION:
 {question}
 
@@ -136,6 +155,7 @@ Create a comprehensive consensus answer that:
 2. Acknowledges any remaining points of disagreement
 3. Provides a balanced, well-reasoned response to the original question
 4. Highlights the key insights that emerged from the deliberation
+5. Verifies any critical facts or current information using the available tools if needed
 
 Format your response as a clear, cohesive answer."""
     
@@ -151,8 +171,8 @@ Format your response as a clear, cohesive answer."""
             System message string
         """
         if role == "deliberation_participant":
-            return "You are a thoughtful AI assistant participating in a multi-model deliberation. Be analytical, consider other perspectives, and engage constructively in collaborative reasoning."
+            return "You are a thoughtful AI assistant participating in a multi-model deliberation. You have access to web search and date/time tools to gather current information. Be analytical, use tools when you need current data, consider other perspectives, and engage constructively in collaborative reasoning."
         elif role == "synthesizer":
-            return "You are an AI assistant tasked with synthesizing consensus from multiple AI perspectives. Be balanced, comprehensive, and focus on common ground."
+            return "You are an AI assistant tasked with synthesizing consensus from multiple AI perspectives. You have access to web search and date/time tools. Be balanced, comprehensive, focus on common ground, and verify key facts with tools when needed."
         else:
-            return "You are a helpful AI assistant."
+            return "You are a helpful AI assistant with access to web search and date/time tools."

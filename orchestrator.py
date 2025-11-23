@@ -7,9 +7,10 @@ import sys
 import time
 
 from config import DeliberationConfig, ModelConfig, get_available_models
-from providers import ProviderFactory, BaseProvider, ProviderError, RateLimitError
+from providers import ProviderFactory, BaseProvider, ProviderError, RateLimitError, ModelResponseChunk
 from prompts import PromptTemplate
 from consensus import ConsensusDetector, ConsensusMetrics
+from tools import ToolRegistry
 
 
 @dataclass
@@ -63,6 +64,9 @@ class DeliberationOrchestrator:
         self.config = config
         self.output_callback = output_callback or self._default_output
         self.consensus_detector = ConsensusDetector(config.consensus_threshold)
+        
+        # Initialize tools
+        self.tool_registry = ToolRegistry()
         
         # Initialize providers
         self.providers: Dict[str, BaseProvider] = {}
@@ -345,7 +349,7 @@ class DeliberationOrchestrator:
         round_number: int
     ) -> ModelResponse:
         """
-        Get response from a single model.
+        Get response from a single model with tool support.
         
         Args:
             model_id: Model identifier
@@ -362,21 +366,47 @@ class DeliberationOrchestrator:
         if not self.config.summary_only:
             self.output_callback(f"\n[{model_name}]", "model_name")
         
-        response_chunks = []
+        response_text_chunks = []
+        tool_results = []
         
         try:
-            # Get response (streaming or not) - rate limiting handled by provider
+            # Get tool definitions
+            tools = self.tool_registry.get_tool_definitions()
+            
+            # Get response with tool support - rate limiting handled by provider
             async for chunk in provider.generate_response(
-                prompt, system_message, stream=self.config.stream
+                prompt, system_message, stream=self.config.stream, tools=tools
             ):
-                response_chunks.append(chunk)
-                if self.config.stream and not self.config.summary_only:
-                    print(chunk, end='', flush=True)
+                # Handle text chunks
+                if chunk.text:
+                    response_text_chunks.append(chunk.text)
+                    if self.config.stream and not self.config.summary_only:
+                        print(chunk.text, end='', flush=True)
+                
+                # Handle tool calls
+                if chunk.tool_calls:
+                    for tool_call in chunk.tool_calls:
+                        if not self.config.summary_only:
+                            print(f"\n🔧 Using tool: {tool_call.name}({tool_call.arguments})", flush=True)
+                        
+                        # Execute the tool
+                        tool_result = await self.tool_registry.execute_tool(
+                            tool_call.name,
+                            tool_call.arguments
+                        )
+                        
+                        tool_results.append(f"\n[Tool: {tool_call.name}]\n{tool_result}\n")
+                        
+                        if not self.config.summary_only:
+                            print(f"✓ Tool result received\n", flush=True)
             
             if not self.config.summary_only:
                 print()  # Newline after streaming
             
-            full_response = "".join(response_chunks)
+            # Combine text response with tool results
+            full_response = "".join(response_text_chunks)
+            if tool_results:
+                full_response += "\n\n" + "".join(tool_results)
             
             return ModelResponse(
                 model_id=model_id,
@@ -419,17 +449,43 @@ class DeliberationOrchestrator:
         self.output_callback("Final Consensus:", "consensus_header")
         self.output_callback("─" * 80, "separator")
         
-        response_chunks = []
+        # Get tool definitions for synthesis (models may want to verify facts)
+        tools = self.tool_registry.get_tool_definitions()
+        
+        response_text_chunks = []
+        tool_results = []
+        
         async for chunk in provider.generate_response(
-            prompt, system_message, stream=self.config.stream
+            prompt, system_message, stream=self.config.stream, tools=tools
         ):
-            response_chunks.append(chunk)
-            if self.config.stream:
-                print(chunk, end='', flush=True)
+            # Handle text chunks
+            if chunk.text:
+                response_text_chunks.append(chunk.text)
+                if self.config.stream:
+                    print(chunk.text, end='', flush=True)
+            
+            # Handle tool calls
+            if chunk.tool_calls:
+                for tool_call in chunk.tool_calls:
+                    print(f"\n🔧 Using tool: {tool_call.name}({tool_call.arguments})", flush=True)
+                    
+                    # Execute the tool
+                    tool_result = await self.tool_registry.execute_tool(
+                        tool_call.name,
+                        tool_call.arguments
+                    )
+                    
+                    tool_results.append(f"\n[Tool: {tool_call.name}]\n{tool_result}\n")
+                    print(f"✓ Tool result received\n", flush=True)
         
         print()  # Newline after streaming
         
-        return "".join(response_chunks)
+        # Combine text response with tool results
+        full_response = "".join(response_text_chunks)
+        if tool_results:
+            full_response += "\n\n" + "".join(tool_results)
+        
+        return full_response
     
     def _default_output(self, message: str, msg_type: str = "info"):
         """
