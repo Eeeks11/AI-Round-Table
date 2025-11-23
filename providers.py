@@ -2,8 +2,9 @@
 
 import asyncio
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, Optional, Dict
+from typing import AsyncIterator, Optional, Dict, List, Any
 import sys
+import json
 
 from config import ModelConfig
 from rate_limiter import RateLimiter, retry_with_exponential_backoff, DEFAULT_RATE_LIMITS
@@ -22,6 +23,23 @@ class RateLimitError(ProviderError):
 class APIKeyError(ProviderError):
     """Invalid or missing API key."""
     pass
+
+
+class ToolCall:
+    """Represents a tool call from a model."""
+    
+    def __init__(self, id: str, name: str, arguments: Dict[str, Any]):
+        self.id = id
+        self.name = name
+        self.arguments = arguments
+
+
+class ModelResponseChunk:
+    """Represents a chunk of model response that may include text or tool calls."""
+    
+    def __init__(self, text: Optional[str] = None, tool_calls: Optional[List[ToolCall]] = None):
+        self.text = text
+        self.tool_calls = tool_calls or []
 
 
 class BaseProvider(ABC):
@@ -55,8 +73,9 @@ class BaseProvider(ABC):
         self,
         prompt: str,
         system_message: Optional[str] = None,
-        stream: bool = True
-    ) -> AsyncIterator[str]:
+        stream: bool = True,
+        tools: Optional[List[Dict[str, Any]]] = None
+    ) -> AsyncIterator[ModelResponseChunk]:
         """
         Generate response from the model.
         
@@ -64,31 +83,38 @@ class BaseProvider(ABC):
             prompt: The prompt to send to the model
             system_message: Optional system message
             stream: Whether to stream the response
+            tools: Optional list of tool definitions for function calling
             
         Yields:
-            Response chunks if streaming, or full response
+            ModelResponseChunk objects containing text and/or tool calls
         """
         pass
     
     async def generate_full_response(
         self,
         prompt: str,
-        system_message: Optional[str] = None
-    ) -> str:
+        system_message: Optional[str] = None,
+        tools: Optional[List[Dict[str, Any]]] = None
+    ) -> tuple[str, List[ToolCall]]:
         """
         Generate complete response (convenience method).
         
         Args:
             prompt: The prompt to send to the model
             system_message: Optional system message
+            tools: Optional list of tool definitions
             
         Returns:
-            Complete response string
+            Tuple of (complete response string, list of tool calls)
         """
-        chunks = []
-        async for chunk in self.generate_response(prompt, system_message, stream=False):
-            chunks.append(chunk)
-        return "".join(chunks)
+        text_chunks = []
+        all_tool_calls = []
+        async for chunk in self.generate_response(prompt, system_message, stream=False, tools=tools):
+            if chunk.text:
+                text_chunks.append(chunk.text)
+            if chunk.tool_calls:
+                all_tool_calls.extend(chunk.tool_calls)
+        return "".join(text_chunks), all_tool_calls
 
 
 class OpenAIProvider(BaseProvider):
@@ -108,8 +134,9 @@ class OpenAIProvider(BaseProvider):
         self,
         prompt: str,
         system_message: Optional[str] = None,
-        stream: bool = True
-    ) -> AsyncIterator[str]:
+        stream: bool = True,
+        tools: Optional[List[Dict[str, Any]]] = None
+    ) -> AsyncIterator[ModelResponseChunk]:
         """Generate response from OpenAI model."""
         messages = []
         
@@ -126,20 +153,76 @@ class OpenAIProvider(BaseProvider):
         
         async def _make_request():
             try:
-                response = await self.client.chat.completions.create(
-                    model=self.config.model_name,
-                    messages=messages,
-                    temperature=self.config.temperature,
-                    max_completion_tokens=self.config.max_tokens,
-                    stream=stream
-                )
+                kwargs = {
+                    "model": self.config.model_name,
+                    "messages": messages,
+                    "temperature": self.config.temperature,
+                    "max_completion_tokens": self.config.max_tokens,
+                    "stream": stream
+                }
+                
+                if tools:
+                    kwargs["tools"] = tools
+                    kwargs["tool_choice"] = "auto"
+                
+                response = await self.client.chat.completions.create(**kwargs)
                 
                 if stream:
+                    tool_calls_buffer = {}
                     async for chunk in response:
-                        if chunk.choices[0].delta.content:
-                            yield chunk.choices[0].delta.content
+                        delta = chunk.choices[0].delta
+                        
+                        # Handle text content
+                        if delta.content:
+                            yield ModelResponseChunk(text=delta.content)
+                        
+                        # Handle tool calls
+                        if delta.tool_calls:
+                            for tool_call_delta in delta.tool_calls:
+                                idx = tool_call_delta.index
+                                if idx not in tool_calls_buffer:
+                                    tool_calls_buffer[idx] = {
+                                        "id": "",
+                                        "name": "",
+                                        "arguments": ""
+                                    }
+                                
+                                if tool_call_delta.id:
+                                    tool_calls_buffer[idx]["id"] = tool_call_delta.id
+                                if tool_call_delta.function.name:
+                                    tool_calls_buffer[idx]["name"] = tool_call_delta.function.name
+                                if tool_call_delta.function.arguments:
+                                    tool_calls_buffer[idx]["arguments"] += tool_call_delta.function.arguments
+                    
+                    # Yield collected tool calls at the end
+                    if tool_calls_buffer:
+                        tool_calls = []
+                        for tc in tool_calls_buffer.values():
+                            try:
+                                args = json.loads(tc["arguments"])
+                                tool_calls.append(ToolCall(tc["id"], tc["name"], args))
+                            except json.JSONDecodeError:
+                                pass
+                        if tool_calls:
+                            yield ModelResponseChunk(tool_calls=tool_calls)
                 else:
-                    yield response.choices[0].message.content
+                    message = response.choices[0].message
+                    
+                    # Handle text content
+                    if message.content:
+                        yield ModelResponseChunk(text=message.content)
+                    
+                    # Handle tool calls
+                    if message.tool_calls:
+                        tool_calls = []
+                        for tc in message.tool_calls:
+                            try:
+                                args = json.loads(tc.function.arguments)
+                                tool_calls.append(ToolCall(tc.id, tc.function.name, args))
+                            except json.JSONDecodeError:
+                                pass
+                        if tool_calls:
+                            yield ModelResponseChunk(tool_calls=tool_calls)
                     
             except Exception as e:
                 if "rate_limit" in str(e).lower() or "429" in str(e):
@@ -177,14 +260,28 @@ class AnthropicProvider(BaseProvider):
         self,
         prompt: str,
         system_message: Optional[str] = None,
-        stream: bool = True
-    ) -> AsyncIterator[str]:
+        stream: bool = True,
+        tools: Optional[List[Dict[str, Any]]] = None
+    ) -> AsyncIterator[ModelResponseChunk]:
         """Generate response from Anthropic model."""
         # Estimate tokens (rough estimate: ~4 chars per token)
         estimated_tokens = (len(prompt) + len(system_message or "")) // 4 + self.config.max_tokens
         
         # Wait if rate limit would be exceeded
         await self.rate_limiter.wait_if_needed(estimated_tokens)
+        
+        # Convert OpenAI-style tools to Anthropic format if provided
+        anthropic_tools = None
+        if tools:
+            anthropic_tools = []
+            for tool in tools:
+                if tool.get("type") == "function":
+                    func = tool["function"]
+                    anthropic_tools.append({
+                        "name": func["name"],
+                        "description": func["description"],
+                        "input_schema": func["parameters"]
+                    })
         
         async def _make_request():
             try:
@@ -198,13 +295,62 @@ class AnthropicProvider(BaseProvider):
                 if system_message:
                     kwargs["system"] = system_message
                 
+                if anthropic_tools:
+                    kwargs["tools"] = anthropic_tools
+                
                 if stream:
                     async with self.client.messages.stream(**kwargs) as response:
-                        async for chunk in response.text_stream:
-                            yield chunk
+                        tool_calls_buffer = []
+                        async for event in response:
+                            # Handle text content
+                            if hasattr(event, 'type'):
+                                if event.type == "content_block_delta":
+                                    if hasattr(event.delta, 'text'):
+                                        yield ModelResponseChunk(text=event.delta.text)
+                                elif event.type == "content_block_start":
+                                    if hasattr(event.content_block, 'type') and event.content_block.type == "tool_use":
+                                        tool_calls_buffer.append({
+                                            "id": event.content_block.id,
+                                            "name": event.content_block.name,
+                                            "input": {}
+                                        })
+                                elif event.type == "content_block_delta":
+                                    if hasattr(event.delta, 'partial_json'):
+                                        # Accumulate tool input
+                                        if tool_calls_buffer:
+                                            tool_calls_buffer[-1]["input"] = event.delta.partial_json
+                        
+                        # Yield collected tool calls
+                        if tool_calls_buffer:
+                            tool_calls = []
+                            for tc in tool_calls_buffer:
+                                try:
+                                    if isinstance(tc["input"], str):
+                                        args = json.loads(tc["input"])
+                                    else:
+                                        args = tc["input"]
+                                    tool_calls.append(ToolCall(tc["id"], tc["name"], args))
+                                except (json.JSONDecodeError, KeyError):
+                                    pass
+                            if tool_calls:
+                                yield ModelResponseChunk(tool_calls=tool_calls)
                 else:
                     response = await self.client.messages.create(**kwargs)
-                    yield response.content[0].text
+                    
+                    # Handle text and tool calls from content blocks
+                    text_parts = []
+                    tool_calls = []
+                    
+                    for block in response.content:
+                        if block.type == "text":
+                            text_parts.append(block.text)
+                        elif block.type == "tool_use":
+                            tool_calls.append(ToolCall(block.id, block.name, block.input))
+                    
+                    if text_parts:
+                        yield ModelResponseChunk(text="".join(text_parts))
+                    if tool_calls:
+                        yield ModelResponseChunk(tool_calls=tool_calls)
                     
             except Exception as e:
                 if "rate_limit" in str(e).lower() or "429" in str(e):
@@ -272,8 +418,9 @@ class GoogleProvider(BaseProvider):
         self,
         prompt: str,
         system_message: Optional[str] = None,
-        stream: bool = True
-    ) -> AsyncIterator[str]:
+        stream: bool = True,
+        tools: Optional[List[Dict[str, Any]]] = None
+    ) -> AsyncIterator[ModelResponseChunk]:
         """Generate response from Google model."""
         # Combine system message with prompt for Gemini
         full_prompt = prompt
@@ -286,19 +433,75 @@ class GoogleProvider(BaseProvider):
         # Wait if rate limit would be exceeded
         await self.rate_limiter.wait_if_needed(estimated_tokens)
         
+        # Convert OpenAI-style tools to Gemini format if provided
+        gemini_tools = None
+        if tools:
+            import google.generativeai as genai
+            gemini_tools = []
+            for tool in tools:
+                if tool.get("type") == "function":
+                    func = tool["function"]
+                    # Gemini uses function declarations
+                    gemini_tools.append(genai.protos.Tool(
+                        function_declarations=[
+                            genai.protos.FunctionDeclaration(
+                                name=func["name"],
+                                description=func["description"],
+                                parameters=func["parameters"]
+                            )
+                        ]
+                    ))
+        
         async def _make_request():
             try:
+                kwargs = {}
+                if gemini_tools:
+                    kwargs["tools"] = gemini_tools
+                
                 if stream:
                     response = await self.model.generate_content_async(
                         full_prompt,
-                        stream=True
+                        stream=True,
+                        **kwargs
                     )
                     async for chunk in response:
+                        # Handle text
                         if chunk.text:
-                            yield chunk.text
+                            yield ModelResponseChunk(text=chunk.text)
+                        
+                        # Handle function calls
+                        if hasattr(chunk, 'candidates') and chunk.candidates:
+                            for candidate in chunk.candidates:
+                                if hasattr(candidate.content, 'parts'):
+                                    for part in candidate.content.parts:
+                                        if hasattr(part, 'function_call') and part.function_call:
+                                            fc = part.function_call
+                                            tool_calls = [ToolCall(
+                                                id=fc.name,  # Gemini doesn't provide IDs, use name
+                                                name=fc.name,
+                                                arguments=dict(fc.args)
+                                            )]
+                                            yield ModelResponseChunk(tool_calls=tool_calls)
                 else:
-                    response = await self.model.generate_content_async(full_prompt)
-                    yield response.text
+                    response = await self.model.generate_content_async(full_prompt, **kwargs)
+                    
+                    # Handle text
+                    if response.text:
+                        yield ModelResponseChunk(text=response.text)
+                    
+                    # Handle function calls
+                    if hasattr(response, 'candidates') and response.candidates:
+                        for candidate in response.candidates:
+                            if hasattr(candidate.content, 'parts'):
+                                for part in candidate.content.parts:
+                                    if hasattr(part, 'function_call') and part.function_call:
+                                        fc = part.function_call
+                                        tool_calls = [ToolCall(
+                                            id=fc.name,  # Gemini doesn't provide IDs, use name
+                                            name=fc.name,
+                                            arguments=dict(fc.args)
+                                        )]
+                                        yield ModelResponseChunk(tool_calls=tool_calls)
                     
             except Exception as e:
                 import google.api_core.exceptions as google_exceptions
@@ -354,8 +557,9 @@ class GrokProvider(BaseProvider):
         self,
         prompt: str,
         system_message: Optional[str] = None,
-        stream: bool = True
-    ) -> AsyncIterator[str]:
+        stream: bool = True,
+        tools: Optional[List[Dict[str, Any]]] = None
+    ) -> AsyncIterator[ModelResponseChunk]:
         """Generate response from Grok model."""
         messages = []
         
@@ -372,20 +576,76 @@ class GrokProvider(BaseProvider):
         
         async def _make_request():
             try:
-                response = await self.client.chat.completions.create(
-                    model=self.config.model_name,
-                    messages=messages,
-                    temperature=self.config.temperature,
-                    max_completion_tokens=self.config.max_tokens,
-                    stream=stream
-                )
+                kwargs = {
+                    "model": self.config.model_name,
+                    "messages": messages,
+                    "temperature": self.config.temperature,
+                    "max_completion_tokens": self.config.max_tokens,
+                    "stream": stream
+                }
+                
+                if tools:
+                    kwargs["tools"] = tools
+                    kwargs["tool_choice"] = "auto"
+                
+                response = await self.client.chat.completions.create(**kwargs)
                 
                 if stream:
+                    tool_calls_buffer = {}
                     async for chunk in response:
-                        if chunk.choices[0].delta.content:
-                            yield chunk.choices[0].delta.content
+                        delta = chunk.choices[0].delta
+                        
+                        # Handle text content
+                        if delta.content:
+                            yield ModelResponseChunk(text=delta.content)
+                        
+                        # Handle tool calls
+                        if delta.tool_calls:
+                            for tool_call_delta in delta.tool_calls:
+                                idx = tool_call_delta.index
+                                if idx not in tool_calls_buffer:
+                                    tool_calls_buffer[idx] = {
+                                        "id": "",
+                                        "name": "",
+                                        "arguments": ""
+                                    }
+                                
+                                if tool_call_delta.id:
+                                    tool_calls_buffer[idx]["id"] = tool_call_delta.id
+                                if tool_call_delta.function.name:
+                                    tool_calls_buffer[idx]["name"] = tool_call_delta.function.name
+                                if tool_call_delta.function.arguments:
+                                    tool_calls_buffer[idx]["arguments"] += tool_call_delta.function.arguments
+                    
+                    # Yield collected tool calls at the end
+                    if tool_calls_buffer:
+                        tool_calls = []
+                        for tc in tool_calls_buffer.values():
+                            try:
+                                args = json.loads(tc["arguments"])
+                                tool_calls.append(ToolCall(tc["id"], tc["name"], args))
+                            except json.JSONDecodeError:
+                                pass
+                        if tool_calls:
+                            yield ModelResponseChunk(tool_calls=tool_calls)
                 else:
-                    yield response.choices[0].message.content
+                    message = response.choices[0].message
+                    
+                    # Handle text content
+                    if message.content:
+                        yield ModelResponseChunk(text=message.content)
+                    
+                    # Handle tool calls
+                    if message.tool_calls:
+                        tool_calls = []
+                        for tc in message.tool_calls:
+                            try:
+                                args = json.loads(tc.function.arguments)
+                                tool_calls.append(ToolCall(tc.id, tc.function.name, args))
+                            except json.JSONDecodeError:
+                                pass
+                        if tool_calls:
+                            yield ModelResponseChunk(tool_calls=tool_calls)
                     
             except Exception as e:
                 if "rate_limit" in str(e).lower() or "429" in str(e):

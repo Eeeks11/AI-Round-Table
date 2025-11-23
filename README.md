@@ -5,6 +5,7 @@ A sophisticated Python application that orchestrates round-table discussions bet
 ## 🌟 Features
 
 - **Multi-Provider Support**: Seamlessly integrates OpenAI, Anthropic, Google Gemini, and Grok APIs
+- **🌐 Internet Access**: Models can search the web for current information, prices, and real-time data
 - **Iterative Deliberation**: Models discuss questions over multiple rounds, building on each other's insights
 - **Consensus Detection**: Automatically detects when models converge on similar conclusions
 - **Real-time Streaming**: Watch responses stream in real-time as models think
@@ -20,6 +21,8 @@ A sophisticated Python application that orchestrates round-table discussions bet
   - Anthropic API key (for Claude models)
   - Google API key (for Gemini models)
   - Grok API key (for Grok models)
+- **Tavily API key** (optional but recommended - enables web search for current information)
+  - Get free API key at https://tavily.com (1,000 searches/month free)
 
 ## 🚀 Quick Start
 
@@ -118,9 +121,14 @@ OPENAI_API_KEY=your_openai_api_key_here
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
 GOOGLE_API_KEY=your_google_api_key_here
 GROK_API_KEY=your_grok_api_key_here
+
+# Optional but HIGHLY RECOMMENDED for internet access
+TAVILY_API_KEY=your_tavily_api_key_here
 ```
 
-**Note**: You only need API keys for the models you want to use. The system will automatically use all available models.
+**Note**: 
+- You only need API keys for the models you want to use. The system will automatically use all available models.
+- **Tavily API key enables web search** - Models can search for current prices, news, and information. Get your free key at https://tavily.com (1,000 searches/month free)
 
 ### 3. Model Configuration (Optional)
 
@@ -136,6 +144,9 @@ python validate_models.py
 ```bash
 # Simple deliberation
 python deliberate.py "What are the biggest risks in AI development?"
+
+# Question requiring current information (models will search the web!)
+python deliberate.py "What's the best sim racing wheel under $500 in 2025?"
 
 # Specify number of rounds
 python deliberate.py "How can we address climate change?" --rounds 5
@@ -288,11 +299,14 @@ multi-model-deliberation/
 1. **Initialization**: The system initializes providers for all available models based on API keys
 
 2. **Round 1 - Initial Responses**: Each model receives the question independently and provides its initial analysis
+   - **NEW**: Models can search the web for current information
+   - **NEW**: Models can check current date/time for any timezone
 
 3. **Round 2+ - Deliberation**: Each model receives:
    - The original question
    - All responses from other models in the previous round
    - Instructions to consider others' perspectives and refine their answer
+   - **NEW**: Ability to verify claims with web search
 
 4. **Consensus Detection**: After each round (starting from round 2), the system analyzes:
    - Cross-referencing between models
@@ -301,6 +315,7 @@ multi-model-deliberation/
    - Agreement language usage
 
 5. **Final Synthesis**: A synthesized consensus answer is generated combining insights from all models
+   - **NEW**: Can verify final facts with web search before consensus
 
 ### Consensus Detection
 
@@ -430,6 +445,7 @@ orchestrator = DeliberationOrchestrator(config, output_callback=my_callback)
 This README provides an overview. For detailed guides, see the [`docs/`](docs/) directory:
 
 - **[Quick Start Guide](docs/QUICKSTART.md)** - Get running in 5 minutes
+- **[🌐 Internet Access Guide](docs/INTERNET_ACCESS.md)** - Enable web search and real-time data
 - **[Model Configuration](docs/MODEL_CONFIG.md)** - Add and configure AI models
 - **[Rate Limiting Guide](docs/RATE_LIMITING.md)** - Understand and configure API limits
 - **[Example Output](docs/EXAMPLE_OUTPUT.md)** - See a sample deliberation session
@@ -580,11 +596,13 @@ For issues or questions:
 
 ## 🎯 Use Cases
 
-- **Research**: Explore different AI perspectives on complex topics
-- **Decision Making**: Get multi-angle analysis for important decisions
+- **Research**: Explore different AI perspectives on complex topics **with current data**
+- **Product Research**: Get current pricing and reviews for products (sim racing gear, tech, etc.)
+- **Decision Making**: Get multi-angle analysis with up-to-date information
+- **Market Analysis**: Research current trends, prices, and availability
 - **Education**: Understand how different models approach problems
-- **Content Creation**: Generate comprehensive, well-rounded content
-- **Problem Solving**: Benefit from diverse AI reasoning approaches
+- **Content Creation**: Generate comprehensive, well-rounded content with verified facts
+- **Problem Solving**: Benefit from diverse AI reasoning **and real-time information**
 
 ## 🚦 Best Practices
 
