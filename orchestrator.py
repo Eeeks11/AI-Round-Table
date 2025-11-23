@@ -161,15 +161,23 @@ class DeliberationOrchestrator:
             }
             all_responses_by_round.append(current_responses)
             
-            # Analyze consensus after round 2+
-            if round_num >= 2:
+            # Analyze consensus after round 1+
+            # For factual questions, we want to detect immediate agreement
+            if round_num >= 1:
                 consensus = self.consensus_detector.analyze_consensus(
                     all_responses_by_round,
                     list(self.model_configs.keys())
                 )
                 round_result.consensus_metrics = consensus
                 
-                if not self.config.summary_only:
+                # Only show consensus analysis after round 1 if it's high
+                # (to avoid clutter for questions that need deliberation)
+                should_show = (
+                    round_num > 1 or 
+                    (round_num == 1 and consensus.convergence_score >= 0.90)
+                )
+                
+                if not self.config.summary_only and should_show:
                     self.output_callback(f"\n{'─'*40}", "separator")
                     self.output_callback("Consensus Analysis:", "consensus_header")
                     self.output_callback(str(consensus), "consensus")
