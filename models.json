@@ -34,6 +34,28 @@
       "enabled": true
     },
     {
+      "id": "gemini_flash",
+      "provider": "google",
+      "model_name": "gemini-2.5-flash",
+      "display_name": "Gemini 2.5 Flash",
+      "api_key_env": "GOOGLE_API_KEY",
+      "temperature": 0.7,
+      "max_tokens": 2000,
+      "timeout": 60,
+      "enabled": true
+    },
+    {
+      "id": "gemini_3_pro",
+      "provider": "google",
+      "model_name": "gemini-3.0-pro",
+      "display_name": "Gemini 3.0 Pro",
+      "api_key_env": "GOOGLE_API_KEY",
+      "temperature": 0.7,
+      "max_tokens": 2000,
+      "timeout": 60,
+      "enabled": true
+    },
+    {
       "id": "grok",
       "provider": "grok",
       "model_name": "grok-4-1-fast-reasoning",

@@ -92,16 +92,35 @@ class RateLimiter:
         # Calculate wait time needed
         wait_time = 0
         
-        # Check RPM limit (leave buffer of 2 requests)
-        buffer = 2 if self.config.requests_per_minute <= 15 else 1
+        # Check RPM limit
+        # For high limits, leave a buffer. For low limits (<= 10), don't buffer to avoid blocking legitimate requests.
+        buffer = 2 if self.config.requests_per_minute > 10 else 0
+        
         if requests_this_minute >= self.config.requests_per_minute - buffer:
-            oldest_request = self._requests_minute[0]
-            wait_time = max(wait_time, 60 - (time.time() - oldest_request))
+            if self._requests_minute:
+                oldest_request = self._requests_minute[0]
+                wait_time = max(wait_time, 60 - (time.time() - oldest_request))
+            else:
+                # If we are here with empty history, it means limit <= buffer (shouldn't happen with new logic)
+                pass
         
         # Check TPM limit (leave 10% buffer)
         if tokens_this_minute + estimated_tokens >= self.config.tokens_per_minute * 0.9:
-            oldest_token = self._tokens_minute[0][0]
-            wait_time = max(wait_time, 60 - (time.time() - oldest_token))
+            if self._tokens_minute:
+                oldest_token = self._tokens_minute[0][0]
+                wait_time = max(wait_time, 60 - (time.time() - oldest_token))
+            else:
+                # No tokens used yet, but this request alone is too big or close to limit.
+                # If this single request is larger than limit, we must either reject or wait.
+                # Since we can't reject here, we wait if we are hitting rate limits.
+                # However, waiting won't help if the request itself > limit.
+                # But if we are just close to limit (buffer), we might not need to wait if it fits.
+                
+                # If empty history, we are at 0 usage.
+                # If 0 + estimated > limit, we can't send it ever?
+                # Or maybe we just send it (since we have 0 usage).
+                pass
+
         
         # Add minimum spacing for low RPM limits (e.g., Gemini with 15 RPM)
         # This spreads requests evenly: 15 RPM = 1 request every 4 seconds
@@ -158,12 +177,28 @@ DEFAULT_RATE_LIMITS: Dict[str, RateLimitConfig] = {
         requests_per_day=1000,
     ),
     "google": RateLimitConfig(
-        requests_per_minute=50,  # Gemini-2.5-pro: 50 RPM
-        tokens_per_minute=1000000,  # Gemini-2.5-pro: 1M TPM
-        requests_per_day=1000,  # Gemini-2.5-pro: 1K RPD
-        max_retries=5,  # More retries for rate limit errors
-        initial_retry_delay=3.0,  # Longer initial delay
-        max_retry_delay=120.0,  # Allow up to 2 minutes between retries
+        requests_per_minute=2,  # Default to safest limit (Pro Free)
+        tokens_per_minute=32000,
+        requests_per_day=50,
+        max_retries=5,
+        initial_retry_delay=5.0,
+        max_retry_delay=120.0,
+    ),
+    "gemini_pro": RateLimitConfig(
+        requests_per_minute=360,  # PAYG Pro Limit
+        tokens_per_minute=2000000, # PAYG TPM
+        requests_per_day=30000,   # High daily limit
+        max_retries=10,           # High retries for stability
+        initial_retry_delay=2.0,  # Standard delay
+        max_retry_delay=60.0,
+    ),
+    "gemini_flash": RateLimitConfig(
+        requests_per_minute=1000, # PAYG Flash Limit
+        tokens_per_minute=4000000,
+        requests_per_day=50000,
+        max_retries=10,
+        initial_retry_delay=2.0,
+        max_retry_delay=60.0,
     ),
     "grok": RateLimitConfig(
         requests_per_minute=60,
@@ -219,9 +254,13 @@ async def retry_with_exponential_backoff(
             # Calculate backoff delay
             if is_rate_limit:
                 # For rate limits, use longer delays
-                delay = min(
-                    config.initial_retry_delay * (config.exponential_base ** attempt) * 2,
-                    config.max_retry_delay
+                # Force at least 60s for Gemini 429s, as the limit is 2 RPM (1 per 30s) but often stricter
+                delay = max(
+                    60.0,
+                    min(
+                        config.initial_retry_delay * (config.exponential_base ** attempt) * 2,
+                        config.max_retry_delay
+                    )
                 )
             else:
                 # For other errors, use shorter delays
