@@ -65,8 +65,8 @@ Examples:
     parser.add_argument(
         "-r", "--rounds",
         type=int,
-        default=3,
-        help="Number of deliberation rounds (default: 3)"
+        default=10,
+        help="Number of deliberation rounds (default: 10)"
     )
     
     parser.add_argument(
@@ -85,8 +85,8 @@ Examples:
     parser.add_argument(
         "--max-tokens",
         type=int,
-        default=2000,
-        help="Maximum tokens per response (default: 2000)"
+        default=8192,
+        help="Maximum tokens per response (default: 8192)"
     )
     
     parser.add_argument(

@@ -20,7 +20,7 @@ class ModelConfig:
     display_name: str
     api_key_env: str
     temperature: float = 0.7
-    max_tokens: int = 2000
+    max_tokens: int = 8192
     enabled: bool = True
     timeout: int = 60
     
@@ -39,7 +39,7 @@ class DeliberationConfig:
     
     rounds: int = 3
     temperature: float = 0.7
-    max_tokens: int = 2000
+    max_tokens: int = 8192
     verbose: bool = False
     summary_only: bool = False
     stream: bool = True
@@ -50,8 +50,8 @@ class DeliberationConfig:
         """Validate configuration after initialization."""
         if self.rounds < 1:
             raise ValueError("Number of rounds must be at least 1")
-        if self.rounds > 10:
-            raise ValueError("Number of rounds cannot exceed 10")
+        if self.rounds > 20:
+            raise ValueError("Number of rounds cannot exceed 20")
         if not 0 <= self.temperature <= 2:
             raise ValueError("Temperature must be between 0 and 2")
         if not 0.5 <= self.consensus_threshold <= 1.0:
