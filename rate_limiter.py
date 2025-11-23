@@ -189,7 +189,7 @@ DEFAULT_RATE_LIMITS: Dict[str, RateLimitConfig] = {
         tokens_per_minute=32000, # Strict TPM
         requests_per_day=50,
         max_retries=5,
-        initial_retry_delay=10.0, # Longer delay for strict limits
+        initial_retry_delay=60.0, # Increase initial delay significantly
         max_retry_delay=300.0,
     ),
     "gemini_flash": RateLimitConfig(
@@ -254,9 +254,13 @@ async def retry_with_exponential_backoff(
             # Calculate backoff delay
             if is_rate_limit:
                 # For rate limits, use longer delays
-                delay = min(
-                    config.initial_retry_delay * (config.exponential_base ** attempt) * 2,
-                    config.max_retry_delay
+                # Force at least 60s for Gemini 429s, as the limit is 2 RPM (1 per 30s) but often stricter
+                delay = max(
+                    60.0,
+                    min(
+                        config.initial_retry_delay * (config.exponential_base ** attempt) * 2,
+                        config.max_retry_delay
+                    )
                 )
             else:
                 # For other errors, use shorter delays
