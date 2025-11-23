@@ -2,7 +2,7 @@
 
 import asyncio
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, Optional
+from typing import AsyncIterator, Optional, Dict
 import sys
 
 from config import ModelConfig
@@ -228,19 +228,29 @@ class AnthropicProvider(BaseProvider):
 class GoogleProvider(BaseProvider):
     """Provider for Google models (Gemini)."""
     
+    # Class-level cache for rate limiters to share limits between instances/models
+    _shared_limiters: Dict[str, RateLimiter] = {}
+    
     def __init__(self, config: ModelConfig):
         """Initialize Google provider."""
         super().__init__(config)
         
-        # Override rate limiter with model-specific config
+        # Determine which rate limiter configuration to use
         if "flash" in config.model_name.lower():
+            limit_key = "gemini_flash"
             rate_limit_config = DEFAULT_RATE_LIMITS["gemini_flash"]
         elif "pro" in config.model_name.lower():
+            limit_key = "gemini_pro"
             rate_limit_config = DEFAULT_RATE_LIMITS["gemini_pro"]
         else:
+            limit_key = "google_default"
             rate_limit_config = DEFAULT_RATE_LIMITS["google"]
             
-        self.rate_limiter = RateLimiter(rate_limit_config)
+        # Use shared limiter if it exists, otherwise create and store it
+        if limit_key not in self._shared_limiters:
+            self._shared_limiters[limit_key] = RateLimiter(rate_limit_config)
+            
+        self.rate_limiter = self._shared_limiters[limit_key]
         
         try:
             import google.generativeai as genai
@@ -291,8 +301,22 @@ class GoogleProvider(BaseProvider):
                     yield response.text
                     
             except Exception as e:
-                if "quota" in str(e).lower() or "rate" in str(e).lower() or "429" in str(e):
+                import google.api_core.exceptions as google_exceptions
+                
+                # Handle Google-specific exceptions
+                if isinstance(e, google_exceptions.ResourceExhausted):
+                    raise RateLimitError(f"Rate limit exceeded for {self.config.display_name} (ResourceExhausted)")
+                
+                # Handle generic exceptions with error strings
+                error_str = str(e).lower()
+                if "quota" in error_str or "rate" in error_str or "429" in error_str:
                     raise RateLimitError(f"Rate limit exceeded for {self.config.display_name}")
+                
+                # Handle blocked content errors (common with Gemini)
+                if "blocked" in error_str or "safety" in error_str:
+                    # Treat safety blocks as a special provider error but not rate limit
+                    raise ProviderError(f"Content blocked by safety filters: {str(e)}")
+                    
                 raise ProviderError(f"Error from {self.config.display_name}: {str(e)}")
         
         # Use retry logic
