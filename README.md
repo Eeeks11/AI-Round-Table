@@ -25,22 +25,82 @@ A sophisticated Python application that orchestrates round-table discussions bet
 
 ### 1. Installation
 
+#### Step 1: Clone the Repository
+
 ```bash
 # Clone or download this repository
 cd multi-model-deliberation
+```
 
-# Create virtual environment (one time)
-python -m venv venv
+#### Step 2: Set Up Virtual Environment
 
-# Activate it (every time you use the tool)
-# On Mac/Linux:
+A virtual environment isolates the project's dependencies from your system Python installation. This is **highly recommended** to avoid conflicts.
+
+**Option A: Using venv (Recommended - Built into Python 3.8+)**
+
+```bash
+# Create virtual environment
+python3 -m venv venv
+
+# Activate the virtual environment
+# On Linux/macOS:
 source venv/bin/activate
-# On Windows:
-venv\Scripts\activate
 
+# On Windows (Command Prompt):
+venv\Scripts\activate.bat
 
-# Install dependencies
+# On Windows (PowerShell):
+venv\Scripts\Activate.ps1
+```
+
+**Option B: Using virtualenv**
+
+```bash
+# Install virtualenv if not already installed
+pip install virtualenv
+
+# Create virtual environment
+virtualenv venv
+
+# Activate (same as above)
+source venv/bin/activate  # Linux/macOS
+venv\Scripts\activate.bat  # Windows CMD
+```
+
+**Option C: Using conda**
+
+```bash
+# Create conda environment
+conda create -n deliberation python=3.11
+
+# Activate conda environment
+conda activate deliberation
+```
+
+**Verify Virtual Environment is Active**
+
+When activated, you should see `(venv)` or `(deliberation)` at the beginning of your command prompt:
+
+```bash
+(venv) user@computer:~/multi-model-deliberation$
+```
+
+**Troubleshooting Virtual Environment**
+
+- **PowerShell Execution Policy Error**: Run `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
+- **python3 command not found**: Try `python` instead of `python3`
+- **To deactivate**: Simply run `deactivate` in your terminal
+
+#### Step 3: Install Dependencies
+
+With your virtual environment activated:
+
+```bash
+# Install all required packages
 pip install -r requirements.txt
+
+# Verify installation
+python test_installation.py
 ```
 
 ### 2. Configuration
@@ -64,7 +124,7 @@ GROK_API_KEY=your_grok_api_key_here
 
 ### 3. Model Configuration (Optional)
 
-All model configurations are now centralized in `models.json`. To add, remove, or modify models, simply edit this file. See [`MODEL_CONFIG.md`](MODEL_CONFIG.md) for details.
+All model configurations are now centralized in `models.json`. To add, remove, or modify models, simply edit this file. See [`docs/MODEL_CONFIG.md`](docs/MODEL_CONFIG.md) for details.
 
 To validate your configuration:
 ```bash
@@ -190,20 +250,37 @@ Shows which models are available based on your API keys.
 
 ```
 multi-model-deliberation/
-├── deliberate.py           # Main CLI entry point
-├── orchestrator.py         # Discussion orchestration logic
-├── providers.py            # API client wrappers
-├── consensus.py            # Consensus detection algorithms
-├── prompts.py             # Prompt templates
-├── config.py              # Configuration management
-├── models.json            # Model configurations (edit this!)
-├── validate_models.py     # Validation script for models.json
-├── requirements.txt        # Python dependencies
-├── .env.example           # Example environment variables
-├── .env                   # Your API keys (create this)
-├── README.md              # This file
-├── MODEL_CONFIG.md        # Model configuration guide
-└── MODELS_QUICK_START.md  # Quick reference for model config
+├── Core Application Files
+│   ├── deliberate.py           # Main CLI entry point
+│   ├── orchestrator.py         # Discussion orchestration logic
+│   ├── providers.py            # API client wrappers
+│   ├── consensus.py            # Consensus detection algorithms
+│   ├── prompts.py              # Prompt templates
+│   ├── config.py               # Configuration management
+│   └── rate_limiter.py         # Rate limiting system
+│
+├── Configuration Files
+│   ├── models.json             # Model configurations (edit this!)
+│   ├── requirements.txt        # Python dependencies
+│   ├── .env.example            # Example environment variables
+│   └── .env                    # Your API keys (create this)
+│
+├── Scripts
+│   ├── validate_models.py      # Validation script for models.json
+│   └── test_installation.py    # Installation verification
+│
+├── Documentation
+│   ├── README.md               # This file
+│   └── docs/                   # Documentation directory
+│       ├── QUICKSTART.md       # 5-minute setup guide
+│       ├── MODEL_CONFIG.md     # Model configuration guide
+│       ├── MODELS_QUICK_START.md  # Quick model config reference
+│       ├── MODEL_REGISTRY.md   # Model registry and specs
+│       ├── RATE_LIMITING.md    # Rate limiting documentation
+│       ├── DEVELOPER_NOTES.md  # Developer documentation
+│       ├── CHANGELOG.md        # Version history
+│       ├── EXAMPLE_OUTPUT.md   # Sample output
+│       └── archive/            # Historical documentation
 ```
 
 ### How It Works
@@ -240,7 +317,7 @@ A convergence score is calculated (0.0 to 1.0), and consensus is reached when it
 
 ### Adding or Modifying Models
 
-**Easy Way**: All model configurations are in `models.json` - just edit this one file! See [`MODEL_CONFIG.md`](MODEL_CONFIG.md) for complete details.
+**Easy Way**: All model configurations are in `models.json` - just edit this one file! See [`docs/MODEL_CONFIG.md`](docs/MODEL_CONFIG.md) for complete details.
 
 Example - Add a new model to `models.json`:
 
@@ -347,6 +424,19 @@ def my_callback(message: str, msg_type: str):
 
 orchestrator = DeliberationOrchestrator(config, output_callback=my_callback)
 ```
+
+## 📚 Documentation
+
+This README provides an overview. For detailed guides, see the [`docs/`](docs/) directory:
+
+- **[Quick Start Guide](docs/QUICKSTART.md)** - Get running in 5 minutes
+- **[Model Configuration](docs/MODEL_CONFIG.md)** - Add and configure AI models
+- **[Rate Limiting Guide](docs/RATE_LIMITING.md)** - Understand and configure API limits
+- **[Example Output](docs/EXAMPLE_OUTPUT.md)** - See a sample deliberation session
+- **[Developer Notes](docs/DEVELOPER_NOTES.md)** - Technical details for contributors
+- **[Changelog](docs/CHANGELOG.md)** - Version history and planned features
+
+**Note**: Historical documentation and development reports have been moved to [`docs/archive/`](docs/archive/) for reference. See [`CLEANUP_SUMMARY.md`](CLEANUP_SUMMARY.md) for details about the repository reorganization.
 
 ## 📊 Example Output
 
