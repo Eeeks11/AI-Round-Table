@@ -51,11 +51,38 @@ class ConsensusDetector:
         Returns:
             ConsensusMetrics object with analysis results
         """
-        if len(responses_by_round) < 2:
+        if len(responses_by_round) < 1:
             return ConsensusMetrics(
                 convergence_score=0.0,
                 agreement_level="insufficient_data",
                 key_agreements=[],
+                key_disagreements=[],
+                has_consensus=False
+            )
+        
+        # For single round, check if all models agree on factual content
+        if len(responses_by_round) == 1:
+            final_responses = responses_by_round[0]
+            
+            # Check factual agreement (dates, numbers, etc.)
+            factual_score = self._calculate_core_answer_consistency(final_responses)
+            
+            # For first round, we need strong factual agreement to claim consensus
+            if factual_score >= 0.95:
+                key_agreements = self._find_common_themes(final_responses)
+                return ConsensusMetrics(
+                    convergence_score=factual_score,
+                    agreement_level="high",
+                    key_agreements=key_agreements,
+                    key_disagreements=[],
+                    has_consensus=True
+                )
+            
+            # Otherwise, need more rounds to establish consensus
+            return ConsensusMetrics(
+                convergence_score=factual_score,
+                agreement_level="low" if factual_score < 0.55 else "medium",
+                key_agreements=self._find_common_themes(final_responses),
                 key_disagreements=[],
                 has_consensus=False
             )
@@ -312,7 +339,7 @@ class ConsensusDetector:
     def _calculate_core_answer_consistency(self, responses: Dict[str, str]) -> float:
         """
         Calculate consistency of core answers across responses.
-        Looks for consistent YES/NO answers or shared conclusion patterns.
+        Looks for consistent YES/NO answers, dates, numbers, or shared factual patterns.
         
         Args:
             responses: Dictionary of model responses
@@ -322,6 +349,11 @@ class ConsensusDetector:
         """
         if len(responses) < 2:
             return 0.5
+        
+        # First, try to extract factual data (dates, numbers, specific facts)
+        factual_consistency = self._check_factual_agreement(responses)
+        if factual_consistency >= 0.9:  # High factual agreement found
+            return factual_consistency
         
         # Extract initial answer patterns from each response
         answer_patterns = []
@@ -377,7 +409,166 @@ class ConsensusDetector:
         if consistency_ratio == 1.0:
             return 1.0
         
-        return consistency_ratio
+        # Use the higher of factual or pattern consistency
+        return max(consistency_ratio, factual_consistency)
+    
+    def _check_factual_agreement(self, responses: Dict[str, str]) -> float:
+        """
+        Check if responses agree on core factual data like dates, numbers, names, etc.
+        
+        Args:
+            responses: Dictionary of model responses
+            
+        Returns:
+            Score between 0.0 and 1.0 indicating factual agreement
+        """
+        if len(responses) < 2:
+            return 0.5
+        
+        # Extract dates from all responses
+        dates = []
+        for response in responses.values():
+            extracted_dates = self._extract_dates(response)
+            if extracted_dates:
+                dates.append(extracted_dates[0])  # Use first date found
+        
+        # If all responses mention the same date, that's perfect consensus
+        if len(dates) >= 2 and len(set(dates)) == 1:
+            # All models agree on the same date
+            return 1.0
+        
+        # Extract numbers (prices, quantities, etc.)
+        numbers = []
+        for response in responses.values():
+            extracted_numbers = self._extract_numbers(response)
+            if extracted_numbers:
+                numbers.extend(extracted_numbers)
+        
+        # Check if key numbers are consistent
+        if numbers:
+            from collections import Counter
+            number_counts = Counter(numbers)
+            most_common_count = number_counts.most_common(1)[0][1] if number_counts else 0
+            if most_common_count >= len(responses) * 0.8:  # 80% mention same number
+                return 0.95
+        
+        # Extract key proper nouns/entities
+        entities = []
+        for response in responses.values():
+            extracted_entities = self._extract_entities(response)
+            entities.extend(extracted_entities)
+        
+        if entities:
+            from collections import Counter
+            entity_counts = Counter(entities)
+            # Check if responses share key entities
+            common_entities = sum(1 for count in entity_counts.values() if count >= len(responses) * 0.7)
+            if common_entities >= 2:
+                return 0.85
+        
+        return 0.0  # No clear factual agreement detected
+    
+    def _extract_dates(self, text: str) -> List[str]:
+        """
+        Extract dates from text in various formats.
+        
+        Args:
+            text: Input text
+            
+        Returns:
+            List of normalized date strings
+        """
+        import re
+        dates = []
+        
+        # Match patterns like: November 23, 2025 / 23 November 2025 / 2025-11-23
+        patterns = [
+            r'(\d{4})-(\d{1,2})-(\d{1,2})',  # 2025-11-23
+            r'(\d{1,2})-(\d{1,2})-(\d{4})',  # 23-11-2025
+            r'((?:January|February|March|April|May|June|July|August|September|October|November|December))\s+(\d{1,2}),?\s+(\d{4})',  # November 23, 2025
+            r'(\d{1,2})\s+((?:January|February|March|April|May|June|July|August|September|October|November|December))\s+(\d{4})',  # 23 November 2025
+        ]
+        
+        text_lower = text.lower()
+        
+        for pattern in patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            for match in matches:
+                # Normalize to YYYY-MM-DD format
+                try:
+                    if re.match(r'\d{4}-\d{1,2}-\d{1,2}', '-'.join(match)):
+                        dates.append('-'.join(match))
+                    else:
+                        # Convert month names to numbers
+                        month_map = {
+                            'january': '01', 'february': '02', 'march': '03', 'april': '04',
+                            'may': '05', 'june': '06', 'july': '07', 'august': '08',
+                            'september': '09', 'october': '10', 'november': '11', 'december': '12'
+                        }
+                        
+                        if len(match) == 3:
+                            month_str = match[0] if match[0].lower() in month_map else match[1]
+                            month_num = month_map.get(month_str.lower(), '01')
+                            
+                            # Find day and year
+                            day = match[1] if match[1].isdigit() else match[0]
+                            year = match[2] if len(match[2]) == 4 else match[0]
+                            
+                            if year.isdigit() and len(year) == 4:
+                                normalized = f"{year}-{month_num}-{day.zfill(2)}"
+                                dates.append(normalized)
+                except:
+                    pass
+        
+        return dates
+    
+    def _extract_numbers(self, text: str) -> List[str]:
+        """
+        Extract significant numbers from text (prices, quantities, etc.).
+        
+        Args:
+            text: Input text
+            
+        Returns:
+            List of number strings
+        """
+        import re
+        
+        # Match numbers with optional currency symbols, decimals, commas
+        patterns = [
+            r'\$[\d,]+\.?\d*',  # $123.45 or $1,234
+            r'£[\d,]+\.?\d*',  # £123.45
+            r'€[\d,]+\.?\d*',  # €123.45
+            r'\b\d+\.?\d*\s*(?:dollars?|euros?|pounds?|km|miles?|percent|%)\b',  # 123 dollars, 45.5 km
+        ]
+        
+        numbers = []
+        for pattern in patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            numbers.extend(matches)
+        
+        return numbers
+    
+    def _extract_entities(self, text: str) -> List[str]:
+        """
+        Extract key proper nouns and entities (capitalized words).
+        
+        Args:
+            text: Input text
+            
+        Returns:
+            List of entity strings
+        """
+        import re
+        
+        # Extract capitalized words (likely proper nouns)
+        entities = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b', text)
+        
+        # Filter out common starting words and keep significant entities
+        common_starts = {'The', 'This', 'That', 'These', 'Those', 'A', 'An', 'In', 'On', 'At', 'To', 'For'}
+        entities = [e for e in entities if e not in common_starts]
+        
+        return entities[:10]  # Return top 10 entities
     
     def _find_disagreements(self, responses: Dict[str, str]) -> List[str]:
         """
